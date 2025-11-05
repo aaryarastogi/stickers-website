@@ -1,16 +1,18 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import GoogleIcon from '@mui/icons-material/Google'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 
 const Login = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const redirectMessage = location.state?.message
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -43,8 +45,9 @@ const Login = () => {
         window.dispatchEvent(new Event('userLogin'))
       }
 
-      // Redirect to home
-      navigate('/')
+      // Redirect to specified route or home
+      const redirectTo = location.state?.redirectTo || '/'
+      navigate(redirectTo)
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.')
       console.error('Login error:', err)
@@ -88,6 +91,13 @@ const Login = () => {
               <div className='w-6 h-6 bg-red-500 rounded transform rotate-45'></div>
             </button>
           </div>
+
+          {/* Redirect Message */}
+          {redirectMessage && (
+            <div className='mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm'>
+              {redirectMessage}
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (

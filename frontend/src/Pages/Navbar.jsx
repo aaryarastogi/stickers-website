@@ -64,6 +64,29 @@ function Navbar(){
       setIsUserDropdownOpen(false);
     }, [location.pathname]);
 
+    // Close dropdown when clicking outside (desktop)
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        const dropdown = event.target.closest('[data-user-dropdown]');
+        const trigger = event.target.closest('[data-user-trigger]');
+        
+        if (isUserDropdownOpen && !dropdown && !trigger) {
+          setIsUserDropdownOpen(false);
+        }
+      };
+      
+      if (isUserDropdownOpen) {
+        // Small delay to allow click events to process first
+        setTimeout(() => {
+          document.addEventListener('click', handleClickOutside);
+        }, 0);
+      }
+      
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }, [isUserDropdownOpen]);
+
   return (
     <nav className="bg-white h-24 py-4 top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
@@ -84,26 +107,53 @@ function Navbar(){
           {/* Auth Buttons / User Menu - Right */}
           <div className="flex items-center space-x-4">
             {user ? (
-              <div 
-                className="relative"
-                onMouseEnter={() => setIsUserDropdownOpen(true)}
-                onMouseLeave={() => setIsUserDropdownOpen(false)}
-              >
-                <div className="flex items-center gap-2 cursor-pointer">
+              <div className="relative" data-user-dropdown>
+                <div 
+                  className="flex items-center gap-2 cursor-pointer"
+                  data-user-trigger
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsUserDropdownOpen(!isUserDropdownOpen)
+                  }}
+                  onMouseEnter={() => setIsUserDropdownOpen(true)}
+                >
                   <span className="text-gray-700 font-medium">Welcome,</span>
                   <span className="text-buttonColorend font-semibold">
                     {user.name?.split(' ')[0] || user.name}
                   </span>
                 </div>
-                {/* Dropdown on hover */}
+                {/* Dropdown on hover or click */}
                 {isUserDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-2">
-                    <button 
-                      className="w-full text-left px-4 py-2 text-buttonColorend hover:bg-gray-100 font-semibold transition-colors"
-                      onClick={handleLogout}>
-                      Logout
-                    </button>
-                  </div>
+                  <>
+                    {/* Invisible area to keep dropdown open when moving mouse */}
+                    <div 
+                      className="absolute right-0 top-full h-2 w-40"
+                      onMouseEnter={() => setIsUserDropdownOpen(true)}
+                      data-user-dropdown
+                    />
+                    <div 
+                      className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50"
+                      data-user-dropdown
+                      onMouseEnter={() => setIsUserDropdownOpen(true)}
+                      onMouseLeave={() => setIsUserDropdownOpen(false)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button 
+                        className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                        onClick={() => {
+                          navigate('/my-stickers');
+                          setIsUserDropdownOpen(false);
+                        }}>
+                        My Stickers
+                      </button>
+                      <div className="border-t border-gray-200 my-1"></div>
+                      <button 
+                        className="w-full text-left px-4 py-2 text-buttonColorend hover:bg-gray-100 font-semibold transition-colors"
+                        onClick={handleLogout}>
+                        Logout
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             ) : (
@@ -153,7 +203,16 @@ function Navbar(){
                     className="fixed inset-0 z-30"
                     onClick={() => setIsUserDropdownOpen(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-40">
+                  <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-40">
+                    <button 
+                      className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => {
+                        navigate('/my-stickers');
+                        setIsUserDropdownOpen(false);
+                      }}>
+                      My Stickers
+                    </button>
+                    <div className="border-t border-gray-200 my-1"></div>
                     <button 
                       className="w-full text-left px-4 py-2 text-buttonColorend hover:bg-gray-100 font-semibold transition-colors"
                       onClick={handleLogout}>

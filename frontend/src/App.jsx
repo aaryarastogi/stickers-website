@@ -9,6 +9,7 @@ import CreateStickers from "./Pages/CreateStickers"
 import Stickers from "./Pages/Stickers"
 import CustomStickerCreator from "./Pages/CustomStickerCreator"
 import AIStickerGenerator from "./Pages/AIStickerGenerator"
+import MyStickers from "./Pages/MyStickers"
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path='/stickers' element={<Stickers/>}></Route>
         <Route path='/custom-sticker-creator' element={<CustomStickerCreator/>}></Route>
         <Route path='/ai-sticker-generator' element={<AIStickerGenerator/>}></Route>
+        <Route path='/my-stickers' element={<MyStickers/>}></Route>
       </Routes>
       <Cart />
     </div>

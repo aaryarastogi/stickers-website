@@ -2,6 +2,7 @@ import React from 'react'
 import HomePage1 from '../Components/HomePage1'
 import BrowseTemplates from '../Components/BrowseTemplates'
 import Trending from '../Components/Trending'
+import PublishedStickers from '../Components/PublishedStickers'
 
 const Home = () => {
   return (
@@ -9,6 +10,7 @@ const Home = () => {
       <HomePage1/>
       <Trending/>
       <BrowseTemplates/>
+      <PublishedStickers/>
     </div>
   )
 }

@@ -1,10 +1,8 @@
 import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from './Navbar'
-import { useCart } from '../context/CartContext'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import DeleteIcon from '@mui/icons-material/Delete'
-import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
 import ZoomOutIcon from '@mui/icons-material/ZoomOut'
 import RotateLeftIcon from '@mui/icons-material/RotateLeft'
@@ -13,19 +11,22 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 
 const CustomStickerCreator = () => {
   const navigate = useNavigate()
-  const { addToCart } = useCart()
   const fileInputRef = useRef(null)
   const [uploadedImage, setUploadedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [dragActive, setDragActive] = useState(false)
   
   // Customization options
+  const [stickerName, setStickerName] = useState('')
+  const [stickerCategory, setStickerCategory] = useState('')
   const [stickerSize, setStickerSize] = useState('3x3')
   const [stickerShape, setStickerShape] = useState('circle')
   const [quantity, setQuantity] = useState(50)
   const [finish, setFinish] = useState('glossy')
   const [imageZoom, setImageZoom] = useState(100)
   const [imageRotation, setImageRotation] = useState(0)
+  const [isPublished, setIsPublished] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const sizes = [
     { value: '2x2', label: '2" × 2"', price: 0.50 },
@@ -71,7 +72,46 @@ const CustomStickerCreator = () => {
     }
   }
 
-  const handleFile = (file) => {
+  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.8) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+
+          // Calculate new dimensions
+          if (width > height) {
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width
+              width = maxWidth
+            }
+          } else {
+            if (height > maxHeight) {
+              width = (width * maxHeight) / height
+              height = maxHeight
+            }
+          }
+
+          canvas.width = width
+          canvas.height = height
+
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+
+          // Convert to base64 with quality compression
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+          resolve(compressedDataUrl)
+        }
+        img.src = e.target.result
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleFile = async (file) => {
     if (!file.type.match('image.*')) {
       alert('Please upload an image file (PNG, JPG, GIF, SVG)')
       return
@@ -82,12 +122,25 @@ const CustomStickerCreator = () => {
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setImagePreview(e.target.result)
+    try {
+      // Compress image if it's large
+      let compressedDataUrl
+      if (file.size > 2 * 1024 * 1024) { // Compress if larger than 2MB
+        compressedDataUrl = await compressImage(file)
+      } else {
+        const reader = new FileReader()
+        compressedDataUrl = await new Promise((resolve) => {
+          reader.onload = (e) => resolve(e.target.result)
+          reader.readAsDataURL(file)
+        })
+      }
+
+      setImagePreview(compressedDataUrl)
       setUploadedImage(file)
+    } catch (error) {
+      console.error('Error processing image:', error)
+      alert('Error processing image. Please try again.')
     }
-    reader.readAsDataURL(file)
   }
 
   const removeImage = () => {
@@ -98,31 +151,114 @@ const CustomStickerCreator = () => {
     }
   }
 
-  const handleAddToCart = () => {
+  const handlePayNow = async () => {
     if (!uploadedImage) {
       alert('Please upload an image first')
       return
     }
 
-    const stickerItem = {
-      id: `custom-${Date.now()}`,
-      name: `Custom ${stickerShape} Sticker (${stickerSize})`,
-      category: 'Custom Sticker',
-      price: parseFloat(totalPrice),
-      quantity: 1,
-      image: imagePreview,
-      specifications: {
-        size: stickerSize,
-        shape: stickerShape,
-        quantity,
-        finish,
-        imageFile: uploadedImage.name
-      }
+    if (!stickerName.trim()) {
+      alert('Please enter a name for your sticker')
+      return
     }
 
-    addToCart(stickerItem)
-    alert('Sticker added to cart!')
-    navigate('/')
+    if (!stickerCategory.trim()) {
+      alert('Please enter a category for your sticker')
+      return
+    }
+
+    // Check if user is logged in (required for payment)
+    const userData = localStorage.getItem('user')
+    const user = userData ? JSON.parse(userData) : null
+
+    if (!user) {
+      alert('Please login to purchase stickers')
+      navigate('/login', { 
+        state: { 
+          message: 'Please login to purchase stickers', 
+          redirectTo: '/custom-sticker-creator' 
+        } 
+      })
+      return
+    }
+
+    setIsSaving(true)
+
+    try {
+      // Always save to database (whether published or not)
+      const stickerData = {
+        user_id: user.id,
+        name: stickerName.trim(),
+        category: stickerCategory.trim(),
+        image_url: imagePreview,
+        specifications: {
+          size: stickerSize,
+          shape: stickerShape,
+          quantity,
+          finish,
+          imageFile: uploadedImage.name
+        },
+        price: parseFloat(totalPrice),
+        is_published: isPublished || false
+      }
+
+      const response = await fetch('/api/custom-stickers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(stickerData),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save sticker')
+      }
+
+      const savedSticker = await response.json()
+      console.log('Sticker saved to database:', savedSticker)
+
+      // Save to purchased stickers in localStorage
+      const stickerItem = {
+        id: savedSticker.id,
+        name: savedSticker.name,
+        category: savedSticker.category,
+        price: parseFloat(savedSticker.price),
+        quantity: 1,
+        image_url: savedSticker.image_url,
+        imagePreview: savedSticker.image_url,
+        image: savedSticker.image_url,
+        specifications: typeof savedSticker.specifications === 'string' 
+          ? JSON.parse(savedSticker.specifications) 
+          : savedSticker.specifications,
+        purchaseDate: new Date().toISOString(),
+        isPublished: savedSticker.is_published
+      }
+
+      // Save to purchased stickers
+      const allPurchases = JSON.parse(localStorage.getItem('purchasedStickers') || '{}')
+      const userKey = user.id || user.email
+      if (!allPurchases[userKey]) {
+        allPurchases[userKey] = []
+      }
+      allPurchases[userKey].push(stickerItem)
+      localStorage.setItem('purchasedStickers', JSON.stringify(allPurchases))
+
+      // Show success message
+      alert(
+        isPublished 
+          ? 'Payment successful! Sticker created and published. It will be visible to other users.' 
+          : 'Payment successful! Sticker created. You can publish it later from My Stickers.'
+      )
+      
+      // Navigate to My Stickers page
+      navigate('/my-stickers')
+    } catch (error) {
+      console.error('Error processing payment:', error)
+      alert(`Payment failed: ${error.message}`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -259,6 +395,36 @@ const CustomStickerCreator = () => {
               <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200 space-y-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">Customize Your Sticker</h2>
                 
+                {/* Name Input */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Sticker Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={stickerName}
+                    onChange={(e) => setStickerName(e.target.value)}
+                    placeholder="Enter a name for your sticker"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none transition-colors"
+                    required
+                  />
+                </div>
+
+                {/* Category Input */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={stickerCategory}
+                    onChange={(e) => setStickerCategory(e.target.value)}
+                    placeholder="Enter a category (e.g., Business, Personal, Event)"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none transition-colors"
+                    required
+                  />
+                </div>
+                
                 {/* Size Selection */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -345,6 +511,29 @@ const CustomStickerCreator = () => {
                     ))}
                   </div>
                 </div>
+
+                {/* Publish Option */}
+                <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isPublished}
+                      onChange={(e) => setIsPublished(e.target.checked)}
+                      className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 focus:ring-2"
+                    />
+                    <div>
+                      <span className="font-semibold text-gray-900">Publish this sticker</span>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Allow other users to see and purchase your sticker design
+                      </p>
+                    </div>
+                  </label>
+                  {!localStorage.getItem('user') && isPublished && (
+                    <p className="text-sm text-orange-600 mt-2 ml-8">
+                      ⚠️ You need to be logged in to publish stickers
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -396,12 +585,37 @@ const CustomStickerCreator = () => {
                   </div>
 
                   <button
-                    onClick={handleAddToCart}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                    onClick={handlePayNow}
+                    disabled={isSaving}
+                    className="w-full py-4 px-6 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold text-lg rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <AddShoppingCartIcon />
-                    Add to Cart
+                    {isSaving ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        Pay Now
+                      </>
+                    )}
                   </button>
+                  {isPublished && (
+                    <p className="text-sm text-center text-purple-600 mt-2">
+                      This sticker will be visible to other users after payment
+                    </p>
+                  )}
+                  {!localStorage.getItem('user') && (
+                    <p className="text-sm text-center text-orange-600 mt-2">
+                      ⚠️ Please login to purchase stickers
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-12 text-gray-500">
