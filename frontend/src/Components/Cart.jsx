@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
+import { useCurrency } from '../context/CurrencyContext'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AddIcon from '@mui/icons-material/Add'
 import RemoveIcon from '@mui/icons-material/Remove'
@@ -16,6 +17,7 @@ const Cart = () => {
     clearCart,
     getTotalPrice 
   } = useCart()
+  const { formatPrice } = useCurrency()
   
   const [user, setUser] = useState(null)
 
@@ -109,7 +111,7 @@ const Cart = () => {
       alert(`Payment successful! ${itemCount} sticker(s) added to your collection.`)
       
       // Redirect to My Stickers page
-      navigate('/my-stickers')
+      navigate('/profile')
     } catch (error) {
       console.error('Error saving purchased stickers:', error)
       alert('Payment processed, but there was an error saving your stickers. Please contact support.')
@@ -211,7 +213,7 @@ const Cart = () => {
                     {/* Price */}
                     <div className="text-right shrink-0">
                       <p className="font-semibold text-gray-800">
-                        ₹ {((item.price || 900) * item.quantity).toFixed(2)}
+                        {formatPrice((item.price || 0) * item.quantity)}
                       </p>
                     </div>
                   </div>
@@ -226,7 +228,7 @@ const Cart = () => {
               <div className="flex items-center justify-between">
                 <span className="text-lg font-bold text-gray-800">Total:</span>
                 <span className="text-lg font-bold text-gray-800">
-                  ₹ {totalPrice.toFixed(2)}
+                  {formatPrice(totalPrice)}
                 </span>
               </div>
               

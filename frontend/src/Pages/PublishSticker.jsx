@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from './Navbar'
-import { useCurrency } from '../context/CurrencyContext'
 import Cropper from 'react-easy-crop'
 import { getCroppedImg } from '../utils/imageUtils'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
@@ -13,10 +12,10 @@ import RotateRightIcon from '@mui/icons-material/RotateRight'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CropIcon from '@mui/icons-material/Crop'
 import CloseIcon from '@mui/icons-material/Close'
+import PublishIcon from '@mui/icons-material/Publish'
 
-const CustomStickerCreator = () => {
+const PublishSticker = () => {
   const navigate = useNavigate()
-  const { formatPrice } = useCurrency()
   const fileInputRef = useRef(null)
   const [uploadedImage, setUploadedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -31,8 +30,7 @@ const CustomStickerCreator = () => {
   const [finish, setFinish] = useState('glossy')
   const [imageZoom, setImageZoom] = useState(100)
   const [imageRotation, setImageRotation] = useState(0)
-  const [isPublished, setIsPublished] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
   
   // Cropping states
   const [showCrop, setShowCrop] = useState(false)
@@ -42,24 +40,14 @@ const CustomStickerCreator = () => {
   const [imageToCrop, setImageToCrop] = useState(null)
 
   const sizes = [
-    { value: '1x1', label: '1" × 1"', price: 0.25 },
-    { value: '2x2', label: '2" × 2"', price: 0.50 },
-    { value: '3x3', label: '3" × 3"', price: 0.75 },
+    { value: '1x1', label: '1" × 1"' },
+    { value: '2x2', label: '2" × 2"' },
+    { value: '3x3', label: '3" × 3"' },
   ]
 
   const shapes = ['circle', 'square', 'rectangle', 'rounded', 'die-cut']
   const finishes = ['glossy', 'matte', 'metal']
   const categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-
-  // Calculate price
-  const selectedSize = sizes.find(s => s.value === stickerSize)
-  const basePrice = selectedSize ? selectedSize.price : 0.75
-  const finishMultiplier = finish === 'waterproof' ? 1.3 : finish === 'transparent' ? 1.2 : 1.0
-  const quantityDiscount = quantity >= 100 ? 0.9 : quantity >= 50 ? 0.95 : quantity >= 25 ? 0.97 : 1.0
-  const calculateTotalPrice = () => {
-    return basePrice * quantity * finishMultiplier * quantityDiscount
-  }
-  const totalPrice = calculateTotalPrice()
 
   const handleDrag = (e) => {
     e.preventDefault()
@@ -263,7 +251,7 @@ const CustomStickerCreator = () => {
     }
   }
 
-  const handlePayNow = async () => {
+  const handlePublishSticker = async () => {
     if (!uploadedImage) {
       alert('Please upload an image first')
       return
@@ -279,25 +267,25 @@ const CustomStickerCreator = () => {
       return
     }
 
-    // Check if user is logged in (required for payment)
+    // Check if user is logged in
     const userData = localStorage.getItem('user')
     const user = userData ? JSON.parse(userData) : null
 
     if (!user) {
-      alert('Please login to purchase stickers')
+      alert('Please login to publish stickers')
       navigate('/login', { 
         state: { 
-          message: 'Please login to purchase stickers', 
-          redirectTo: '/custom-sticker-creator' 
+          message: 'Please login to publish stickers', 
+          redirectTo: '/publish-sticker' 
         } 
       })
       return
     }
 
-    setIsSaving(true)
+    setIsPublishing(true)
 
     try {
-      // Always save to database (whether published or not)
+      // Save to database with is_published = true
       const stickerData = {
         user_id: user.id,
         name: stickerName.trim(),
@@ -310,8 +298,8 @@ const CustomStickerCreator = () => {
           finish,
           imageFile: uploadedImage.name
         },
-        price: parseFloat(totalPrice),
-        is_published: isPublished || false
+        price: 0, // Free publishing - no cost
+        is_published: true // Always publish for this page
       }
 
       const response = await fetch('/api/custom-stickers', {
@@ -324,52 +312,22 @@ const CustomStickerCreator = () => {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to save sticker')
+        throw new Error(error.error || 'Failed to publish sticker')
       }
 
       const savedSticker = await response.json()
-      console.log('Sticker saved to database:', savedSticker)
-
-      // Save to purchased stickers in localStorage
-      const stickerItem = {
-        id: savedSticker.id,
-        name: savedSticker.name,
-        category: savedSticker.category,
-        price: parseFloat(savedSticker.price),
-        quantity: 1,
-        image_url: savedSticker.image_url,
-        imagePreview: savedSticker.image_url,
-        image: savedSticker.image_url,
-        specifications: typeof savedSticker.specifications === 'string' 
-          ? JSON.parse(savedSticker.specifications) 
-          : savedSticker.specifications,
-        purchaseDate: new Date().toISOString(),
-        isPublished: savedSticker.is_published
-      }
-
-      // Save to purchased stickers
-      const allPurchases = JSON.parse(localStorage.getItem('purchasedStickers') || '{}')
-      const userKey = user.id || user.email
-      if (!allPurchases[userKey]) {
-        allPurchases[userKey] = []
-      }
-      allPurchases[userKey].push(stickerItem)
-      localStorage.setItem('purchasedStickers', JSON.stringify(allPurchases))
+      console.log('Sticker published:', savedSticker)
 
       // Show success message
-      alert(
-        isPublished 
-          ? 'Payment successful! Sticker created and published. It will be visible to other users.' 
-          : 'Payment successful! Sticker created. You can publish it later from My Stickers.'
-      )
+      alert('Sticker published successfully! It will be visible to other users.')
       
-      // Navigate to My Stickers page
+      // Navigate to profile page
       navigate('/profile')
     } catch (error) {
-      console.error('Error processing payment:', error)
-      alert(`Payment failed: ${error.message}`)
+      console.error('Error publishing sticker:', error)
+      alert(`Failed to publish sticker: ${error.message}`)
     } finally {
-      setIsSaving(false)
+      setIsPublishing(false)
     }
   }
 
@@ -380,17 +338,11 @@ const CustomStickerCreator = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/createstickers')}
-            className="text-purple-600 hover:text-purple-700 font-medium mb-4 flex items-center gap-2"
-          >
-            ← Back to Create Stickers
-          </button>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
-            Create Custom Sticker
+            Publish Sticker
           </h1>
           <p className="text-gray-600 text-lg">
-            Upload your design and customize your perfect sticker
+            Create and publish your sticker design for others to see and purchase
           </p>
         </div>
 
@@ -635,7 +587,6 @@ const CustomStickerCreator = () => {
                         }`}
                       >
                         <div className="font-semibold text-gray-900">{size.label}</div>
-                        <div className="text-sm text-gray-600">{formatPrice(size.price)} each</div>
                       </button>
                     ))}
                   </div>
@@ -720,44 +671,21 @@ const CustomStickerCreator = () => {
                     ))}
                   </div>
                 </div>
-
-                {/* Publish Option */}
-                <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isPublished}
-                      onChange={(e) => setIsPublished(e.target.checked)}
-                      className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 focus:ring-2"
-                    />
-                    <div>
-                      <span className="font-semibold text-gray-900">Publish this sticker</span>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Allow other users to see and purchase your sticker design
-                      </p>
-                    </div>
-                  </label>
-                  {!localStorage.getItem('user') && isPublished && (
-                    <p className="text-sm text-orange-600 mt-2 ml-8">
-                      ⚠️ You need to be logged in to publish stickers
-                    </p>
-                  )}
-                </div>
               </div>
             )}
           </div>
 
-          {/* Right Column - Order Summary */}
+          {/* Right Column - Publish Section */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200 sticky top-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Order Summary</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Publish Your Sticker</h2>
               
               {imagePreview ? (
                 <>
                   <div className="space-y-4 mb-6">
                     <div className="flex justify-between text-gray-600">
                       <span>Size:</span>
-                      <span className="font-semibold">{selectedSize?.label}</span>
+                      <span className="font-semibold">{sizes.find(s => s.value === stickerSize)?.label || '3" × 3"'}</span>
                     </div>
                     <div className="flex justify-between text-gray-600">
                       <span>Shape:</span>
@@ -771,77 +699,59 @@ const CustomStickerCreator = () => {
                       <span>Finish:</span>
                       <span className="font-semibold capitalize">{finish}</span>
                     </div>
-                    {quantityDiscount < 1 && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <div className="flex items-center gap-2 text-green-700">
-                          <CheckCircleIcon fontSize="small" />
-                          <span className="text-sm font-semibold">
-                            {((1 - quantityDiscount) * 100).toFixed(0)}% Quantity Discount Applied!
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div className="border-t border-gray-200 pt-4 mb-6">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-lg font-semibold text-gray-900">Total:</span>
-                      <span className="text-3xl font-bold text-purple-600">{formatPrice(totalPrice)}</span>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      {formatPrice(totalPrice / quantity)} per sticker
+                    <p className="text-sm text-gray-600 mb-4">
+                      Publishing your sticker is <span className="font-semibold text-purple-600">free</span>. Once published, your sticker will be visible to all users and they can purchase it.
                     </p>
                   </div>
 
                   <button
-                    onClick={handlePayNow}
-                    disabled={isSaving}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold text-lg rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handlePublishSticker}
+                    disabled={isPublishing}
+                    className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSaving ? (
+                    {isPublishing ? (
                       <>
                         <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Processing...
+                        Publishing...
                       </>
                     ) : (
                       <>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                        Pay Now
+                        <PublishIcon />
+                        Publish Sticker
                       </>
                     )}
                   </button>
-                  {isPublished && (
-                    <p className="text-sm text-center text-purple-600 mt-2">
-                      This sticker will be visible to other users after payment
-                    </p>
-                  )}
+                  <p className="text-sm text-center text-purple-600 mt-2">
+                    This sticker will be visible to other users after publishing
+                  </p>
                   {!localStorage.getItem('user') && (
                     <p className="text-sm text-center text-orange-600 mt-2">
-                      ⚠️ Please login to purchase stickers
+                      ⚠️ Please login to publish stickers
                     </p>
                   )}
                 </>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <p>Upload an image to see pricing</p>
+                  <p>Upload an image to publish</p>
                 </div>
               )}
             </div>
 
             {/* Help Section */}
             <div className="bg-purple-50 rounded-xl p-6 mt-6 border border-purple-200">
-              <h3 className="font-semibold text-gray-900 mb-3">Need Help?</h3>
+              <h3 className="font-semibold text-gray-900 mb-3">Publishing Tips</h3>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li>• Use high-resolution images (300 DPI)</li>
                 <li>• PNG with transparent background recommended</li>
-                <li>• Minimum size: 2" × 2"</li>
-                <li>• 4-day turnaround time</li>
-                <li>• Free shipping on orders over $50</li>
+                <li>• Add a clear, descriptive name</li>
+                <li>• Choose the right category</li>
+                <li>• Published stickers are visible to all users</li>
               </ul>
             </div>
           </div>
@@ -851,5 +761,5 @@ const CustomStickerCreator = () => {
   )
 }
 
-export default CustomStickerCreator
+export default PublishSticker
 

@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
+import { useCurrency } from '../context/CurrencyContext';
 
 function ExpandedSearchBar(){
   const navigate = useNavigate();
+  const { formatPrice } = useCurrency();
   const [searchValue, setSearchValue] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [searchResults, setSearchResults] = useState({ stickers: [], templates: [] });
+  const [searchResults, setSearchResults] = useState({ stickers: [], templates: [], users: [] });
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeoutRef = useRef(null);
 
@@ -40,7 +42,7 @@ function ExpandedSearchBar(){
     }
 
     if (searchValue.trim().length === 0) {
-      setSearchResults({ stickers: [], templates: [] });
+      setSearchResults({ stickers: [], templates: [], users: [] });
       setIsSearching(false);
       return;
     }
@@ -58,7 +60,7 @@ function ExpandedSearchBar(){
         setSearchResults(data);
       } catch (error) {
         console.error('Search error:', error);
-        setSearchResults({ stickers: [], templates: [] });
+        setSearchResults({ stickers: [], templates: [], users: [] });
       } finally {
         setIsSearching(false);
       }
@@ -72,12 +74,21 @@ function ExpandedSearchBar(){
   }, [searchValue]);
 
   const handleStickerClick = (sticker) => {
-    navigate('/stickers', { state: { templateTitle: sticker.template_title } });
-    handleCollapse();
+    // Use sticker_type from backend, fallback to checking template_id for backward compatibility
+    const stickerType = sticker.sticker_type || (sticker.template_id ? 'template' : 'user_created')
+    navigate(`/sticker/${stickerType}/${sticker.id}`)
+    handleCollapse()
   };
 
   const handleTemplateClick = (template) => {
     navigate('/stickers', { state: { templateTitle: template.title } });
+    handleCollapse();
+  };
+
+  const handleUserClick = (user) => {
+    if (user.username) {
+      navigate(`/profile/${user.username}`);
+    }
     handleCollapse();
   };
 
@@ -138,9 +149,46 @@ function ExpandedSearchBar(){
           <div className="p-4 text-center text-gray-500">Searching...</div>
         ) : (
           <>
-            {/* Templates Results */}
-            {searchResults.templates.length > 0 && (
+            {/* Users Results */}
+            {searchResults.users && searchResults.users.length > 0 && (
               <div className="p-2">
+                <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Users</div>
+                {searchResults.users.map((user) => (
+                  <div
+                    key={user.id}
+                    onClick={() => handleUserClick(user)}
+                    className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer rounded-lg transition-colors"
+                  >
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
+                      {user.profile_image_url ? (
+                        <img
+                          src={user.profile_image_url}
+                          alt={user.name || user.username}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = 'none'
+                            e.target.nextSibling.style.display = 'flex'
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-full h-full flex items-center justify-center ${user.profile_image_url ? 'hidden' : ''} text-white font-semibold text-lg`} style={{ backgroundColor: '#F456D5' }}>
+                        {(user.name || user.username || 'U').charAt(0).toUpperCase()}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">{user.name || user.username}</div>
+                      {user.username && (
+                        <div className="text-sm text-gray-500">@{user.username}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Templates Results */}
+            {searchResults.templates && searchResults.templates.length > 0 && (
+              <div className={`p-2 ${searchResults.users && searchResults.users.length > 0 ? 'border-t border-gray-200' : ''}`}>
                 <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Templates</div>
                 {searchResults.templates.map((template) => (
                   <div
@@ -168,8 +216,8 @@ function ExpandedSearchBar(){
             )}
 
             {/* Stickers Results */}
-            {searchResults.stickers.length > 0 && (
-              <div className="p-2 border-t border-gray-200">
+            {searchResults.stickers && searchResults.stickers.length > 0 && (
+              <div className={`p-2 border-t border-gray-200`}>
                 <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Stickers</div>
                 {searchResults.stickers.map((sticker) => (
                   <div
@@ -187,7 +235,7 @@ function ExpandedSearchBar(){
                     />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-gray-900 truncate">{sticker.name}</div>
-                      <div className="text-sm text-gray-500">${parseFloat(sticker.price).toFixed(2)} • {sticker.template_title}</div>
+                      <div className="text-sm text-gray-500">{formatPrice(parseFloat(sticker.price))} • {sticker.template_title}</div>
                     </div>
                   </div>
                 ))}
@@ -195,7 +243,10 @@ function ExpandedSearchBar(){
             )}
 
             {/* No Results */}
-            {searchResults.stickers.length === 0 && searchResults.templates.length === 0 && searchValue.trim().length >= 2 && (
+            {(!searchResults.users || searchResults.users.length === 0) && 
+             (!searchResults.stickers || searchResults.stickers.length === 0) && 
+             (!searchResults.templates || searchResults.templates.length === 0) && 
+             searchValue.trim().length >= 2 && (
               <div className="p-4 text-center text-gray-500">
                 No results found for "{searchValue}"
               </div>

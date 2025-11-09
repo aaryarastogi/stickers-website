@@ -84,7 +84,7 @@ const SignUp = () => {
                 <div className='w-10 h-10 bg-gradient-to-br from-purple-300 to-blue-300 rounded-lg transform rotate-12 shadow-lg'></div>
                 <div className='absolute -top-1 -left-1 w-10 h-10 bg-gradient-to-br from-pink-300 to-purple-300 rounded-lg opacity-80'></div>
               </div>
-              <span className='text-2xl font-bold text-gray-900'>Sticker<span className='text-yellow-400'>2</span></span>
+              <span className='text-2xl font-bold text-gray-900'>Stickkery</span>
             </button>
             <Link to='/login' className='text-sm text-blue-600 hover:text-blue-700 font-medium'>
               Have an account? Sign in

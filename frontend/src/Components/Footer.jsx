@@ -23,7 +23,7 @@ const Footer = () => {
                 <div className='w-10 h-10 bg-gradient-to-br from-purple-400 to-blue-400 rounded-lg transform rotate-12 shadow-lg'></div>
                 <div className='absolute -top-1 -left-1 w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-400 rounded-lg opacity-80'></div>
               </div>
-              <span className='text-2xl font-bold'>Sticker<span className='text-yellow-400'>2</span></span>
+              <span className='text-2xl font-bold'>Stickkery</span>
             </div>
             <p className='text-gray-400 text-sm leading-relaxed'>
               Create custom stickers that express your unique style. High-quality printing, endless customization options, and fast delivery.
@@ -128,8 +128,8 @@ const Footer = () => {
             <ul className='space-y-3'>
               <li className='flex items-start gap-3'>
                 <EmailIcon className='text-yellow-400 mt-1' fontSize='small' />
-                <a href='mailto:support@sticker2.com' className='text-gray-400 hover:text-white transition-colors duration-200 text-sm'>
-                  support@sticker2.com
+                <a href='mailto:support@stickkery.com' className='text-gray-400 hover:text-white transition-colors duration-200 text-sm'>
+                  support@stickkery.com
                 </a>
               </li>
               <li className='flex items-start gap-3'>
@@ -168,7 +168,7 @@ const Footer = () => {
         <div className='border-t border-gray-700 mt-8 pt-8'>
           <div className='flex flex-col md:flex-row justify-between items-center gap-4'>
             <p className='text-gray-400 text-sm'>
-              © {currentYear} Sticker2. All rights reserved.
+              © {currentYear} Stickkery. All rights reserved.
             </p>
             <div className='flex gap-6 text-sm'>
               <Link to='#' className='text-gray-400 hover:text-white transition-colors duration-200'>

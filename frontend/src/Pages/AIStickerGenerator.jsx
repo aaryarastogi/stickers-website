@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from './Navbar'
 import { useCart } from '../context/CartContext'
+import { useCurrency } from '../context/CurrencyContext'
 import { generateAIImage } from '../services/aiImageService'
 import { validatePromptForSticker } from '@/utils/promptFilter'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
@@ -16,6 +17,7 @@ import WarningIcon from '@mui/icons-material/Warning'
 const AIStickerGenerator = () => {
   const navigate = useNavigate()
   const { addToCart } = useCart()
+  const { formatPrice } = useCurrency()
   
   const [prompt, setPrompt] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -677,7 +679,6 @@ const AIStickerGenerator = () => {
     }
 
     addToCart(stickerItem)
-    alert('AI Generated Sticker added to cart!')
     navigate('/')
   }
 
@@ -906,7 +907,7 @@ const AIStickerGenerator = () => {
                         }`}
                       >
                         <div className="font-semibold text-gray-900">{size.label}</div>
-                        <div className="text-sm text-gray-600">${size.price.toFixed(2)} each</div>
+                        <div className="text-sm text-gray-600">{formatPrice(size.price)} each</div>
                       </button>
                     ))}
                   </div>
@@ -989,7 +990,7 @@ const AIStickerGenerator = () => {
                   <div className="space-y-4 mb-6">
                     <div className="flex justify-between text-gray-600">
                       <span>AI Generation:</span>
-                      <span className="font-semibold">${aiGenerationFee.toFixed(2)}</span>
+                      <span className="font-semibold">{formatPrice(aiGenerationFee)}</span>
                     </div>
                     <div className="flex justify-between text-gray-600">
                       <span>Size:</span>
@@ -1022,10 +1023,10 @@ const AIStickerGenerator = () => {
                   <div className="border-t border-gray-200 pt-4 mb-6">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-lg font-semibold text-gray-900">Total:</span>
-                      <span className="text-3xl font-bold text-purple-600">${totalPrice}</span>
+                      <span className="text-3xl font-bold text-purple-600">{formatPrice(parseFloat(totalPrice))}</span>
                     </div>
                     <p className="text-sm text-gray-500">
-                      ${((parseFloat(totalPrice) - aiGenerationFee) / quantity).toFixed(2)} per sticker
+                      {formatPrice((parseFloat(totalPrice) - aiGenerationFee) / quantity)} per sticker
                     </p>
                   </div>
 

@@ -60,24 +60,7 @@ const BrowseTemplates = () => {
 
   return (
     <div className="bg-white pt-10">
-      <h1 className="text-3xl font-semibold text-textColor mb-6">Browse Templates</h1>
-      
-      {/* Categories */}
-      <div className="flex flex-wrap gap-3 mb-8">
-        {categories.map(cat => (
-          <button 
-            key={cat.id} 
-            onClick={() => handleCategoryClick(cat.id)}
-            className={`font-semibold py-2 px-4 rounded-md cursor-pointer transition ${
-              selectedCategory === cat.id
-                ? 'bg-gradient-to-r from-buttonColorst to-buttonColorend text-white'
-                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-            }`}
-          >
-            {cat.name}
-          </button>
-        ))}
-      </div>
+      <h1 className="text-3xl font-semibold text-textColor mb-6">Categories</h1>
 
       {/* Error Message */}
       {error && (
@@ -89,7 +72,7 @@ const BrowseTemplates = () => {
       {/* Loading State */}
       {loading ? (
         <div className="flex justify-center items-center py-12">
-          <div className="text-gray-500 text-lg">Loading templates...</div>
+          <div className="text-gray-500 text-lg">Loading Categories...</div>
         </div>
       ) : (
         /* Sticker Cards */
