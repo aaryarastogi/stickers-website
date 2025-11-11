@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from './Navbar'
 import { useCurrency } from '../context/CurrencyContext'
@@ -7,6 +7,7 @@ import { getCroppedImg } from '../utils/imageUtils'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
+import { getUserFromStorage } from '../utils/storageUtils'
 import ZoomOutIcon from '@mui/icons-material/ZoomOut'
 import RotateLeftIcon from '@mui/icons-material/RotateLeft'
 import RotateRightIcon from '@mui/icons-material/RotateRight'
@@ -31,8 +32,12 @@ const CustomStickerCreator = () => {
   const [finish, setFinish] = useState('glossy')
   const [imageZoom, setImageZoom] = useState(100)
   const [imageRotation, setImageRotation] = useState(0)
-  const [isPublished, setIsPublished] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  
+  // Categories state
+  const [categories, setCategories] = useState([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [categoriesError, setCategoriesError] = useState(null)
   
   // Cropping states
   const [showCrop, setShowCrop] = useState(false)
@@ -49,7 +54,37 @@ const CustomStickerCreator = () => {
 
   const shapes = ['circle', 'square', 'rectangle', 'rounded', 'die-cut']
   const finishes = ['glossy', 'matte', 'metal']
-  const categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+  
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true)
+        setCategoriesError(null)
+        const response = await fetch('/api/templates/categories')
+        if (!response.ok) {
+          throw new Error('Failed to fetch categories')
+        }
+        const data = await response.json()
+        // Sort categories alphabetically by name
+        const sortedCategories = data.sort((a, b) => {
+          const nameA = a.name?.toLowerCase() || ''
+          const nameB = b.name?.toLowerCase() || ''
+          return nameA.localeCompare(nameB)
+        })
+        setCategories(sortedCategories)
+      } catch (error) {
+        console.error('Error fetching categories:', error)
+        setCategoriesError(error.message)
+        // Fallback to empty array if fetch fails
+        setCategories([])
+      } finally {
+        setCategoriesLoading(false)
+      }
+    }
+    
+    fetchCategories()
+  }, [])
 
   // Calculate price
   const selectedSize = sizes.find(s => s.value === stickerSize)
@@ -280,8 +315,7 @@ const CustomStickerCreator = () => {
     }
 
     // Check if user is logged in (required for payment)
-    const userData = localStorage.getItem('user')
-    const user = userData ? JSON.parse(userData) : null
+    const user = getUserFromStorage()
 
     if (!user) {
       alert('Please login to purchase stickers')
@@ -311,7 +345,7 @@ const CustomStickerCreator = () => {
           imageFile: uploadedImage.name
         },
         price: parseFloat(totalPrice),
-        is_published: isPublished || false
+        is_published: false
       }
 
       const response = await fetch('/api/custom-stickers', {
@@ -344,7 +378,9 @@ const CustomStickerCreator = () => {
           ? JSON.parse(savedSticker.specifications) 
           : savedSticker.specifications,
         purchaseDate: new Date().toISOString(),
-        isPublished: savedSticker.is_published
+        isPublished: savedSticker.is_published,
+        status: savedSticker.status,
+        admin_note: savedSticker.admin_note
       }
 
       // Save to purchased stickers
@@ -356,12 +392,7 @@ const CustomStickerCreator = () => {
       allPurchases[userKey].push(stickerItem)
       localStorage.setItem('purchasedStickers', JSON.stringify(allPurchases))
 
-      // Show success message
-      alert(
-        isPublished 
-          ? 'Payment successful! Sticker created and published. It will be visible to other users.' 
-          : 'Payment successful! Sticker created. You can publish it later from My Stickers.'
-      )
+      alert('Payment successful! Your sticker has been submitted for review. You will be notified once it is approved or rejected.')
       
       // Navigate to My Stickers page
       navigate('/profile')
@@ -608,14 +639,32 @@ const CustomStickerCreator = () => {
                     onChange={(e) => setStickerCategory(e.target.value)}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none transition-colors bg-white"
                     required
+                    disabled={categoriesLoading}
                   >
-                    <option value="">Select a category</option>
+                    <option value="">
+                      {categoriesLoading ? 'Loading categories...' : 'Select a category'}
+                    </option>
+                    {categoriesError && (
+                      <option value="" disabled>
+                        Error loading categories
+                      </option>
+                    )}
                     {categories.map((category) => (
-                      <option key={category} value={category}>
-                        Category {category}
+                      <option key={category.id} value={category.name}>
+                        {category.name}
                       </option>
                     ))}
                   </select>
+                  {categoriesError && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {categoriesError}. Please refresh the page to try again.
+                    </p>
+                  )}
+                  {categories.length === 0 && !categoriesLoading && !categoriesError && (
+                    <p className="mt-1 text-sm text-gray-500">
+                      No categories available. Please contact support.
+                    </p>
+                  )}
                 </div>
                 
                 {/* Size Selection */}
@@ -720,29 +769,6 @@ const CustomStickerCreator = () => {
                     ))}
                   </div>
                 </div>
-
-                {/* Publish Option */}
-                <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isPublished}
-                      onChange={(e) => setIsPublished(e.target.checked)}
-                      className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 focus:ring-2"
-                    />
-                    <div>
-                      <span className="font-semibold text-gray-900">Publish this sticker</span>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Allow other users to see and purchase your sticker design
-                      </p>
-                    </div>
-                  </label>
-                  {!localStorage.getItem('user') && isPublished && (
-                    <p className="text-sm text-orange-600 mt-2 ml-8">
-                      ⚠️ You need to be logged in to publish stickers
-                    </p>
-                  )}
-                </div>
               </div>
             )}
           </div>
@@ -815,12 +841,7 @@ const CustomStickerCreator = () => {
                       </>
                     )}
                   </button>
-                  {isPublished && (
-                    <p className="text-sm text-center text-purple-600 mt-2">
-                      This sticker will be visible to other users after payment
-                    </p>
-                  )}
-                  {!localStorage.getItem('user') && (
+                  {!getUserFromStorage() && (
                     <p className="text-sm text-center text-orange-600 mt-2">
                       ⚠️ Please login to purchase stickers
                     </p>

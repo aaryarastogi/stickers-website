@@ -213,7 +213,7 @@ const CreateStickers = () => {
             onClick={() => navigate('/')}
             className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-full hover:from-purple-700 hover:to-pink-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105"
           >
-            Browse Templates
+            Browse Categories
             <span className="text-xl">→</span>
           </button>
         </div>

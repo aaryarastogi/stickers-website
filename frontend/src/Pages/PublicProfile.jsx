@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from './Navbar'
 import { useCurrency } from '../context/CurrencyContext'
+import { getUserFromStorage } from '../utils/storageUtils'
 
 const PublicProfile = () => {
   const navigate = useNavigate()
@@ -26,17 +27,12 @@ const PublicProfile = () => {
         const data = await response.json()
         
         // Check if the current user is viewing their own profile
-        const userData = localStorage.getItem('user')
-        if (userData) {
-          try {
-            const currentUser = JSON.parse(userData)
-            // If the current user's username matches the profile username, redirect to own profile
-            if (currentUser.username === username || currentUser.username === data.username) {
-              navigate('/profile', { replace: true })
-              return
-            }
-          } catch (e) {
-            console.error('Error parsing user data:', e)
+        const currentUser = getUserFromStorage()
+        if (currentUser) {
+          // If the current user's username matches the profile username, redirect to own profile
+          if (currentUser.username === username || currentUser.username === data.username) {
+            navigate('/profile', { replace: true })
+            return
           }
         }
         

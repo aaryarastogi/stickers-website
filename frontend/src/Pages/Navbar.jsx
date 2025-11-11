@@ -6,6 +6,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import { useCart } from '../context/CartContext';
+import { getUserFromStorage } from '../utils/storageUtils';
 
 function Navbar(){
     const[searchValue , setSearchValue] = useState("");
@@ -20,17 +21,8 @@ function Navbar(){
     const { openCart } = useCart();
     useEffect(() => {
       const checkUser = () => {
-        const userData = localStorage.getItem('user');
-        if (userData) {
-          try {
-            setUser(JSON.parse(userData));
-          } catch (e) {
-            console.error('Error parsing user data:', e);
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-        }
+        const user = getUserFromStorage();
+        setUser(user);
       };
       
       checkUser();

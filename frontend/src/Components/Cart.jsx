@@ -5,6 +5,7 @@ import { useCurrency } from '../context/CurrencyContext'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AddIcon from '@mui/icons-material/Add'
 import RemoveIcon from '@mui/icons-material/Remove'
+import { getUserFromStorage } from '../utils/storageUtils'
 
 const Cart = () => {
   const navigate = useNavigate()
@@ -24,17 +25,8 @@ const Cart = () => {
   // Check if user is logged in
   useEffect(() => {
     const checkUser = () => {
-      const userData = localStorage.getItem('user')
-      if (userData) {
-        try {
-          setUser(JSON.parse(userData))
-        } catch (e) {
-          console.error('Error parsing user data:', e)
-          setUser(null)
-        }
-      } else {
-        setUser(null)
-      }
+      const user = getUserFromStorage()
+      setUser(user)
     }
     
     checkUser()

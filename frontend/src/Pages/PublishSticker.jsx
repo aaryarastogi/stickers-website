@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from './Navbar'
 import Cropper from 'react-easy-crop'
@@ -7,6 +7,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
 import ZoomOutIcon from '@mui/icons-material/ZoomOut'
+import { getUserFromStorage } from '../utils/storageUtils'
 import RotateLeftIcon from '@mui/icons-material/RotateLeft'
 import RotateRightIcon from '@mui/icons-material/RotateRight'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -32,6 +33,11 @@ const PublishSticker = () => {
   const [imageRotation, setImageRotation] = useState(0)
   const [isPublishing, setIsPublishing] = useState(false)
   
+  // Categories state
+  const [categories, setCategories] = useState([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [categoriesError, setCategoriesError] = useState(null)
+  
   // Cropping states
   const [showCrop, setShowCrop] = useState(false)
   const [crop, setCrop] = useState({ x: 0, y: 0 })
@@ -47,7 +53,37 @@ const PublishSticker = () => {
 
   const shapes = ['circle', 'square', 'rectangle', 'rounded', 'die-cut']
   const finishes = ['glossy', 'matte', 'metal']
-  const categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+  
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true)
+        setCategoriesError(null)
+        const response = await fetch('/api/templates/categories')
+        if (!response.ok) {
+          throw new Error('Failed to fetch categories')
+        }
+        const data = await response.json()
+        // Sort categories alphabetically by name
+        const sortedCategories = data.sort((a, b) => {
+          const nameA = a.name?.toLowerCase() || ''
+          const nameB = b.name?.toLowerCase() || ''
+          return nameA.localeCompare(nameB)
+        })
+        setCategories(sortedCategories)
+      } catch (error) {
+        console.error('Error fetching categories:', error)
+        setCategoriesError(error.message)
+        // Fallback to empty array if fetch fails
+        setCategories([])
+      } finally {
+        setCategoriesLoading(false)
+      }
+    }
+    
+    fetchCategories()
+  }, [])
 
   const handleDrag = (e) => {
     e.preventDefault()
@@ -268,8 +304,7 @@ const PublishSticker = () => {
     }
 
     // Check if user is logged in
-    const userData = localStorage.getItem('user')
-    const user = userData ? JSON.parse(userData) : null
+    const user = getUserFromStorage()
 
     if (!user) {
       alert('Please login to publish stickers')
@@ -299,7 +334,7 @@ const PublishSticker = () => {
           imageFile: uploadedImage.name
         },
         price: 0, // Free publishing - no cost
-        is_published: true // Always publish for this page
+        is_published: false
       }
 
       const response = await fetch('/api/custom-stickers', {
@@ -316,10 +351,10 @@ const PublishSticker = () => {
       }
 
       const savedSticker = await response.json()
-      console.log('Sticker published:', savedSticker)
+      console.log('Sticker submitted for review:', savedSticker)
 
       // Show success message
-      alert('Sticker published successfully! It will be visible to other users.')
+      alert('Sticker submitted! Our team will review it shortly. You will be notified once it is approved or rejected.')
       
       // Navigate to profile page
       navigate('/profile')
@@ -339,10 +374,10 @@ const PublishSticker = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
-            Publish Sticker
+            Submit Sticker for Review
           </h1>
           <p className="text-gray-600 text-lg">
-            Create and publish your sticker design for others to see and purchase
+            Share your sticker with the community—our team will review it before publishing
           </p>
         </div>
 
@@ -560,14 +595,32 @@ const PublishSticker = () => {
                     onChange={(e) => setStickerCategory(e.target.value)}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none transition-colors bg-white"
                     required
+                    disabled={categoriesLoading}
                   >
-                    <option value="">Select a category</option>
+                    <option value="">
+                      {categoriesLoading ? 'Loading categories...' : 'Select a category'}
+                    </option>
+                    {categoriesError && (
+                      <option value="" disabled>
+                        Error loading categories
+                      </option>
+                    )}
                     {categories.map((category) => (
-                      <option key={category} value={category}>
-                        Category {category}
+                      <option key={category.id} value={category.name}>
+                        {category.name}
                       </option>
                     ))}
                   </select>
+                  {categoriesError && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {categoriesError}. Please refresh the page to try again.
+                    </p>
+                  )}
+                  {categories.length === 0 && !categoriesLoading && !categoriesError && (
+                    <p className="mt-1 text-sm text-gray-500">
+                      No categories available. Please contact support.
+                    </p>
+                  )}
                 </div>
                 
                 {/* Size Selection */}
@@ -718,19 +771,19 @@ const PublishSticker = () => {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Publishing...
+                        Submitting...
                       </>
                     ) : (
                       <>
                         <PublishIcon />
-                        Publish Sticker
+                        Submit for Review
                       </>
                     )}
                   </button>
                   <p className="text-sm text-center text-purple-600 mt-2">
                     This sticker will be visible to other users after publishing
                   </p>
-                  {!localStorage.getItem('user') && (
+                  {!getUserFromStorage() && (
                     <p className="text-sm text-center text-orange-600 mt-2">
                       ⚠️ Please login to publish stickers
                     </p>

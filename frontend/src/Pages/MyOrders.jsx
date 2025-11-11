@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from './Navbar'
 import { useCurrency } from '../context/CurrencyContext'
+import { getUserFromStorage } from '../utils/storageUtils'
 
 const MyOrders = () => {
   const navigate = useNavigate()
@@ -17,11 +18,9 @@ const MyOrders = () => {
 
   useEffect(() => {
     // Check if user is logged in
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      try {
-        const parsedUser = JSON.parse(userData)
-        setUser(parsedUser)
+    const parsedUser = getUserFromStorage()
+    if (parsedUser) {
+      setUser(parsedUser)
         
         // Get purchased stickers for this user
         const allPurchases = JSON.parse(localStorage.getItem('purchasedStickers') || '{}')
@@ -57,10 +56,6 @@ const MyOrders = () => {
         
         setOrders(sortedOrders)
         setFilteredOrders(sortedOrders)
-      } catch (e) {
-        console.error('Error parsing user data:', e)
-        setUser(null)
-      }
     } else {
       // Redirect to login if not logged in
       navigate('/login', { state: { message: 'Please login to view your orders', redirectTo: '/my-orders' } })

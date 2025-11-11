@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import GoogleIcon from '@mui/icons-material/Google'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import { setUserInStorage } from '../utils/storageUtils'
 
 const Login = () => {
   const navigate = useNavigate()
@@ -40,7 +41,12 @@ const Login = () => {
       // Store token in localStorage
       if (data.token) {
         localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
+        // Use utility to store only essential user data
+        const success = setUserInStorage(data.user)
+        if (!success) {
+          setError('Failed to save user data. Please try again.')
+          return
+        }
         // Dispatch event to update navbar
         window.dispatchEvent(new Event('userLogin'))
       }

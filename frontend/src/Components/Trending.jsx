@@ -40,9 +40,9 @@ const Trending = () => {
   }
 
   const handleStickerClick = (sticker) => {
-    // If it's a template sticker, navigate to stickers page
+    // If it's a category sticker, navigate to stickers page
     if (sticker.template_title) {
-      navigate('/stickers', { state: { templateTitle: sticker.template_title } })
+      navigate('/stickers', { state: { categoryName: sticker.template_title } })
     }
     // For user-created stickers, don't navigate (or navigate to profile)
   }

@@ -64,7 +64,7 @@ const Footer = () => {
               </li>
               <li>
                 <Link to='#' className='text-gray-400 hover:text-white transition-colors duration-200 text-sm'>
-                  Browse Templates
+                  Browse Categories
                 </Link>
               </li>
               <li>

@@ -7,6 +7,7 @@ import ShareIcon from '@mui/icons-material/Share'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import Cropper from 'react-easy-crop'
 import { getCroppedImg } from '../utils/imageUtils'
+import { getUserFromStorage, updateUserFieldInStorage } from '../utils/storageUtils'
 
 const Profile = () => {
   const navigate = useNavigate()
@@ -31,14 +32,10 @@ const Profile = () => {
 
   useEffect(() => {
     fetchProfile()
-    // Get current user from localStorage
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      try {
-        setUser(JSON.parse(userData))
-      } catch (e) {
-        console.error('Error parsing user data:', e)
-      }
+    // Get current user from localStorage using utility
+    const user = getUserFromStorage()
+    if (user) {
+      setUser(user)
     }
   }, [])
 
@@ -46,8 +43,7 @@ const Profile = () => {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
-      const userData = localStorage.getItem('user')
-      const currentUser = userData ? JSON.parse(userData) : null
+      const currentUser = getUserFromStorage()
 
       // Own profile (requires auth)
       if (!token || !currentUser) {
@@ -93,7 +89,24 @@ const Profile = () => {
       })
       if (response.ok) {
         const data = await response.json()
-        setMyStickers(data)
+        const formatted = data.map((sticker) => {
+          let specs = sticker.specifications
+          if (typeof specs === 'string') {
+            try {
+              specs = JSON.parse(specs)
+            } catch (err) {
+              specs = null
+            }
+          }
+          const status = (sticker.status || (sticker.is_published ? 'APPROVED' : 'PENDING')).toUpperCase()
+          return {
+            ...sticker,
+            specifications: specs || {},
+            status,
+            admin_note: sticker.admin_note || sticker.adminNote || null,
+          }
+        })
+        setMyStickers(formatted)
       }
     } catch (err) {
       console.error('Error fetching stickers:', err)
@@ -184,13 +197,8 @@ const Profile = () => {
         setCrop({ x: 0, y: 0 })
         setZoom(1)
         setCroppedAreaPixels(null)
-        // Update local storage user data
-        const userData = localStorage.getItem('user')
-        if (userData) {
-          const user = JSON.parse(userData)
-          user.profileImageUrl = data.profileImageUrl
-          localStorage.setItem('user', JSON.stringify(user))
-        }
+        // Update local storage user data using utility
+        updateUserFieldInStorage('profileImageUrl', data.profileImageUrl)
       } else {
         const error = await response.json()
         alert(error.error || 'Failed to update image')
@@ -224,15 +232,10 @@ const Profile = () => {
         const data = await response.json()
         setProfile(data)
         setIsEditingUsername(false)
-        // Update local storage user data
-        const userData = localStorage.getItem('user')
-        if (userData) {
-          const user = JSON.parse(userData)
-          user.username = data.username
-          localStorage.setItem('user', JSON.stringify(user))
-        }
+        // Update local storage user data using utility
+        updateUserFieldInStorage('username', data.username)
         // If on public profile, navigate to new username
-        if (username) {
+        if (profile?.username) {
           navigate(`/profile/${data.username}`)
         }
       } else {
@@ -246,7 +249,7 @@ const Profile = () => {
   }
 
   const handleShareProfile = () => {
-    const profileUrl = `${window.location.origin}/profile/${profile.username}`
+    const profileUrl = `${window.location.origin}/profile/${profile?.username}`
     navigator.clipboard.writeText(profileUrl).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -632,123 +635,105 @@ const Profile = () => {
           <h2 className="text-2xl font-semibold text-textColor mb-6">My Creations</h2>
           {myStickers.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {myStickers.map((sticker) => (
-                <div
-                  key={sticker.id}
-                  className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow"
-                >
-                  {/* Sticker Image */}
-                  <div 
-                    className="relative bg-gray-200 rounded-t-2xl w-full h-64 flex items-center justify-center overflow-hidden cursor-pointer"
-                    onClick={() => navigate(`/sticker/user_created/${sticker.id}`)}
-                  >
-                    <img
-                      src={sticker.image_url || sticker.imageUrl || 'https://via.placeholder.com/300'}
-                      alt={sticker.name || 'Sticker'}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none'
-                        e.target.nextSibling.style.display = 'flex'
-                      }}
-                    />
-                    <div className="text-gray-400 text-sm hidden items-center justify-center h-full">
-                      Sticker Preview
-                    </div>
-                    {/* Published Badge */}
-                    {sticker.is_published && (
-                      <div className="absolute top-2 right-2 bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full z-10">
-                        Published
-                      </div>
-                    )}
-                  </div>
+              {myStickers.map((sticker) => {
+                const normalizedStatus = (sticker.status || (sticker.is_published ? 'APPROVED' : 'PENDING')).toUpperCase()
+                const isApproved = normalizedStatus === 'APPROVED'
+                const isPending = normalizedStatus === 'PENDING'
+                const isRejected = normalizedStatus === 'REJECTED'
+                const statusLabel = isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending Review'
+                const statusClasses = isApproved
+                  ? 'bg-green-500 text-white'
+                  : isRejected
+                    ? 'bg-red-500 text-white'
+                    : 'bg-amber-400 text-gray-900'
 
-                  {/* Sticker Info */}
-                  <div className="p-4">
-                    <h3 className="font-bold text-gray-900 text-lg mb-1 truncate">
-                      {sticker.name || 'Custom Sticker'}
-                    </h3>
-                    {sticker.category && (
-                      <p className="text-sm text-gray-500 mb-2">{sticker.category}</p>
-                    )}
-                    <div className="flex items-center justify-between mb-3">
-                                <span className="text-gray-600 font-semibold">
-                                  {formatPrice(parseFloat(sticker.price || 0))}
-                                </span>
-                      <div className="flex items-center gap-3">
-                        {/* Like Count Display (no button, just show count) */}
-                        {sticker.like_count > 0 && (
-                          <div className="flex items-center gap-1 text-gray-500 text-xs">
-                            <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                            </svg>
-                            <span>{sticker.like_count}</span>
-                          </div>
-                        )}
-                        <span className="text-xs text-gray-400">
-                          {new Date(sticker.created_at).toLocaleDateString()}
-                        </span>
+                return (
+                  <div
+                    key={sticker.id}
+                    className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow"
+                  >
+                    {/* Sticker Image */}
+                    <div 
+                      className="relative bg-gray-200 rounded-t-2xl w-full h-64 flex items-center justify-center overflow-hidden cursor-pointer"
+                      onClick={() => navigate(`/sticker/user_created/${sticker.id}`)}
+                    >
+                      <img
+                        src={sticker.image_url || sticker.imageUrl || 'https://via.placeholder.com/300'}
+                        alt={sticker.name || 'Sticker'}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none'
+                          e.target.nextSibling.style.display = 'flex'
+                        }}
+                      />
+                      <div className="text-gray-400 text-sm hidden items-center justify-center h-full">
+                        Sticker Preview
+                      </div>
+                      <div className={`absolute top-2 right-2 text-xs font-semibold px-2 py-1 rounded-full z-10 ${statusClasses}`}>
+                        {statusLabel}
                       </div>
                     </div>
-                    {sticker.specifications && typeof sticker.specifications === 'object' && (
-                      <div className="mb-3 pt-2 border-t border-gray-200">
-                        <div className="text-xs text-gray-500 space-y-1">
-                          {sticker.specifications.size && (
-                            <div>Size: {sticker.specifications.size}</div>
+
+                    {/* Sticker Info */}
+                    <div className="p-4">
+                      <h3 className="font-bold text-gray-900 text-lg mb-1 truncate">
+                        {sticker.name || 'Custom Sticker'}
+                      </h3>
+                      {sticker.category && (
+                        <p className="text-sm text-gray-500 mb-2">{sticker.category}</p>
+                      )}
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-gray-600 font-semibold">
+                          {formatPrice(parseFloat(sticker.price || 0))}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          {sticker.like_count > 0 && (
+                            <div className="flex items-center gap-1 text-gray-500 text-xs">
+                              <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                              </svg>
+                              <span>{sticker.like_count}</span>
+                            </div>
                           )}
-                          {sticker.specifications.finish && (
-                            <div>Finish: {sticker.specifications.finish}</div>
-                          )}
+                          <span className="text-xs text-gray-400">
+                            {new Date(sticker.created_at).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
-                    )}
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            if (!user) return
-                            
-                            try {
-                              const token = localStorage.getItem('token')
-                              const response = await fetch(`/api/custom-stickers/${sticker.id}/publish`, {
-                                method: 'PATCH',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': `Bearer ${token}`
-                                },
-                                body: JSON.stringify({
-                                  user_id: user.id,
-                                  is_published: !sticker.is_published
-                                })
-                              })
 
-                              if (response.ok) {
-                                // Refresh the list
-                                fetchUserStickers(profile.id)
-                                fetchProfile()
-                              } else {
-                                const error = await response.json()
-                                alert(`Failed to update: ${error.error}`)
-                              }
-                            } catch (error) {
-                              console.error('Error updating publish status:', error)
-                              alert('Failed to update publish status')
-                            }
-                          }}
-                          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
-                            sticker.is_published
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          {sticker.is_published ? '✓ Published' : 'Publish'}
-                        </button>
+                      <div className="mb-3">
+                        {isPending && (
+                          <p className="text-sm text-amber-600">
+                            Awaiting admin review.
+                          </p>
+                        )}
+                        {isRejected && sticker.admin_note && (
+                          <p className="text-sm text-red-600">
+                            Reason: {sticker.admin_note}
+                          </p>
+                        )}
+                      </div>
+
+                      {sticker.specifications && typeof sticker.specifications === 'object' && Object.keys(sticker.specifications).length > 0 && (
+                        <div className="mb-3 pt-2 border-t border-gray-200">
+                          <div className="text-xs text-gray-500 space-y-1">
+                            {sticker.specifications.size && (
+                              <div>Size: {sticker.specifications.size}</div>
+                            )}
+                            {sticker.specifications.finish && (
+                              <div>Finish: {sticker.specifications.finish}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
                         <button
                           onClick={async (e) => {
                             e.stopPropagation()
                             if (!user) return
 
-                            // Confirm deletion
                             const confirmed = window.confirm('Are you sure you want to delete this sticker? This action cannot be undone.')
                             if (!confirmed) return
 
@@ -762,7 +747,6 @@ const Profile = () => {
                               })
 
                               if (response.ok) {
-                                // Refresh the list and profile
                                 fetchUserStickers(profile.id)
                                 fetchProfile()
                               } else {
@@ -774,7 +758,7 @@ const Profile = () => {
                               alert('Failed to delete sticker')
                             }
                           }}
-                          className="py-2 px-4 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg font-semibold transition-colors"
+                          className="flex-1 py-2 px-4 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg font-semibold transition-colors"
                           title="Delete sticker"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -782,9 +766,10 @@ const Profile = () => {
                           </svg>
                         </button>
                       </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className="text-center py-12 bg-gray-50 rounded-xl">
