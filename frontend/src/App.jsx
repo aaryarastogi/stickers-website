@@ -15,6 +15,7 @@ import Profile from "./Pages/Profile"
 import PublicProfile from "./Pages/PublicProfile"
 import StickerDetail from "./Pages/StickerDetail"
 import PublishSticker from "./Pages/PublishSticker"
+import ComingSoon from "./Pages/ComingSoon"
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
         <Route path='/profile/:username' element={<PublicProfile/>}></Route>
         <Route path='/sticker/:type/:stickerId' element={<StickerDetail/>}></Route>
         <Route path='/publish-sticker' element={<PublishSticker/>}></Route>
+        <Route path='/coming-soon' element={<ComingSoon/>}></Route>
         </Routes>
         <Cart />
       </div>

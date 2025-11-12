@@ -32,7 +32,16 @@ const Login = () => {
         }),
       })
 
-      const data = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch (jsonError) {
+        // If response is not JSON, handle it
+        if (!response.ok) {
+          throw new Error(`Login failed: ${response.status} ${response.statusText}`)
+        }
+        throw new Error('Invalid response from server')
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Login failed')
@@ -49,6 +58,8 @@ const Login = () => {
         }
         // Dispatch event to update navbar
         window.dispatchEvent(new Event('userLogin'))
+      } else {
+        throw new Error('No token received from server')
       }
 
       // Redirect to specified route or home

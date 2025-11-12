@@ -873,4 +873,3 @@ const CustomStickerCreator = () => {
 }
 
 export default CustomStickerCreator
-
