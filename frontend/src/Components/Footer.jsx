@@ -30,9 +30,6 @@ const Footer = () => {
             </p>
             {/* Social Media Icons */}
             <div className='flex gap-3 pt-2'>
-              <a href='#' className='w-10 h-10 flex items-center justify-center bg-gray-700 hover:bg-gradient-to-br hover:from-blue-600 hover:to-blue-700 rounded-full transition-all duration-300 transform hover:scale-110' aria-label='Facebook'>
-                <FacebookIcon fontSize='small' />
-              </a>
               <a href='#' className='w-10 h-10 flex items-center justify-center bg-gray-700 hover:bg-gradient-to-br hover:from-blue-400 hover:to-cyan-500 rounded-full transition-all duration-300 transform hover:scale-110' aria-label='Twitter'>
                 <TwitterIcon fontSize='small' />
               </a>
@@ -41,9 +38,6 @@ const Footer = () => {
               </a>
               <a href='#' className='w-10 h-10 flex items-center justify-center bg-gray-700 hover:bg-gradient-to-br hover:from-blue-700 hover:to-blue-800 rounded-full transition-all duration-300 transform hover:scale-110' aria-label='LinkedIn'>
                 <LinkedInIcon fontSize='small' />
-              </a>
-              <a href='#' className='w-10 h-10 flex items-center justify-center bg-gray-700 hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 rounded-full transition-all duration-300 transform hover:scale-110' aria-label='YouTube'>
-                <YouTubeIcon fontSize='small' />
               </a>
             </div>
           </div>
@@ -86,7 +80,7 @@ const Footer = () => {
           </div>
 
           {/* Support */}
-          <div>
+          {/* <div>
             <h3 className='text-lg font-semibold mb-4 text-white'>Support</h3>
             <ul className='space-y-2'>
               <li>
@@ -120,7 +114,7 @@ const Footer = () => {
                 </Link>
               </li>
             </ul>
-          </div>
+          </div> */}
 
           {/* Contact Info */}
           <div>
@@ -129,21 +123,8 @@ const Footer = () => {
               <li className='flex items-start gap-3'>
                 <EmailIcon className='text-yellow-400 mt-1' fontSize='small' />
                 <a href='mailto:support@stickkery.com' className='text-gray-400 hover:text-white transition-colors duration-200 text-sm'>
-                  support@stickkery.com
+                  contactus@stickkery.com
                 </a>
-              </li>
-              <li className='flex items-start gap-3'>
-                <PhoneIcon className='text-yellow-400 mt-1' fontSize='small' />
-                <a href='tel:+1234567890' className='text-gray-400 hover:text-white transition-colors duration-200 text-sm'>
-                  +1 (234) 567-890
-                </a>
-              </li>
-              <li className='flex items-start gap-3'>
-                <LocationOnIcon className='text-yellow-400 mt-1' fontSize='small' />
-                <span className='text-gray-400 text-sm'>
-                  123 Sticker Street<br />
-                  Design City, DC 12345
-                </span>
               </li>
             </ul>
             
