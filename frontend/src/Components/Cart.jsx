@@ -5,7 +5,14 @@ import { useCurrency } from '../context/CurrencyContext'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AddIcon from '@mui/icons-material/Add'
 import RemoveIcon from '@mui/icons-material/Remove'
-import { getUserFromStorage } from '../utils/storageUtils'
+import { getUserFromStorage, getTokenFromStorage } from '../utils/storageUtils'
+import { 
+  initializeRazorpay, 
+  createPaymentOrder, 
+  verifyPayment, 
+  openRazorpayCheckout,
+  convertToSmallestUnit 
+} from '../utils/razorpayUtils'
 
 const Cart = () => {
   const navigate = useNavigate()
@@ -18,9 +25,10 @@ const Cart = () => {
     clearCart,
     getTotalPrice 
   } = useCart()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, formatPriceWithCurrency, formatStickerPrice, currency, convertPrice } = useCurrency()
   
   const [user, setUser] = useState(null)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   // Check if user is logged in
   useEffect(() => {
@@ -49,10 +57,81 @@ const Cart = () => {
     }
   }, [])
 
-  // Calculate total price
-  const totalPrice = getTotalPrice()
+  // Initialize Razorpay on component mount
+  useEffect(() => {
+    initializeRazorpay()
+  }, [])
 
-  const handlePayment = () => {
+  // Calculate total price - if all items are in same currency, sum directly
+  // Otherwise, convert all to user's selected currency
+  const calculateTotal = () => {
+    if (cartItems.length === 0) return { total: 0, currency: currency.code }
+    
+    // Debug: Log all cart items
+    console.log('Cart Items:', cartItems.map(item => ({
+      name: item.name,
+      price: item.price,
+      currency: item.currency,
+      quantity: item.quantity
+    })))
+    
+    // Check if all items have the same currency
+    const firstCurrency = (cartItems[0].currency || 'USD').toUpperCase()
+    const allSameCurrency = cartItems.every(item => 
+      (item.currency || 'USD').toUpperCase() === firstCurrency
+    )
+    
+    console.log('Currency Check:', {
+      firstCurrency,
+      allSameCurrency,
+      userCurrency: currency.code
+    })
+    
+    if (allSameCurrency) {
+      // All items in same currency - just sum them
+      let total = 0
+      cartItems.forEach(item => {
+        const itemPrice = parseFloat(item.price || 0)
+        const itemQuantity = item.quantity || 1
+        total += itemPrice * itemQuantity
+        console.log(`Adding item: ${itemPrice} ${firstCurrency} x ${itemQuantity} = ${itemPrice * itemQuantity}`)
+      })
+      console.log('Total (same currency):', total, firstCurrency)
+      return { total, currency: firstCurrency }
+    } else {
+      // Mixed currencies - convert all to user's selected currency
+      const EXCHANGE_RATES = {
+        USD: 1.0,
+        INR: 83.0,
+        GBP: 0.79,
+        CAD: 1.35,
+        AED: 3.67,
+        EUR: 0.92,
+        RUB: 92.0,
+        AUD: 1.52
+      }
+      
+      let total = 0
+      const userCurrency = currency.code.toUpperCase()
+      
+      cartItems.forEach(item => {
+        const itemPrice = parseFloat(item.price || 0)
+        const itemCurrency = (item.currency || 'USD').toUpperCase()
+        
+        // Convert item price from its currency to USD first
+        const itemPriceInUSD = itemPrice / (EXCHANGE_RATES[itemCurrency] || 1.0)
+        // Then convert from USD to user's selected currency
+        const itemPriceInUserCurrency = itemPriceInUSD * (EXCHANGE_RATES[userCurrency] || 1.0)
+        
+        total += itemPriceInUserCurrency * (item.quantity || 1)
+      })
+      return { total, currency: userCurrency }
+    }
+  }
+  
+  const { total: totalPrice, currency: totalCurrency } = calculateTotal()
+
+  const handlePayment = async () => {
     if (!user) {
       // Close cart and redirect to login
       closeCart()
@@ -69,29 +148,134 @@ const Cart = () => {
       alert('Your cart is empty')
       return
     }
+
+    const token = getTokenFromStorage()
+    if (!token) {
+      alert('Please login to proceed with payment')
+      closeCart()
+      navigate('/login')
+      return
+    }
     
-    // User is logged in, proceed with payment
-    console.log('Processing payment for user:', user)
+    setIsProcessing(true)
     
-    // Save number of items before clearing cart
-    const itemCount = cartItems.length
-    
-    // Save purchased stickers to localStorage
     try {
-      const allPurchases = JSON.parse(localStorage.getItem('purchasedStickers') || '{}')
-      // Use user id or email as key
-      const userKey = user.id || user.email
-      const userPurchases = allPurchases[userKey] || []
+      // Use the same calculation as display total
+      // If all items are in same currency, use that currency for payment
+      // Otherwise, convert to user's selected currency
+      const EXCHANGE_RATES = {
+        USD: 1.0,
+        INR: 83.0,
+        GBP: 0.79,
+        CAD: 1.35,
+        AED: 3.67,
+        EUR: 0.92,
+        RUB: 92.0,
+        AUD: 1.52
+      }
       
-      // Add current cart items to purchased stickers with purchase date
-      const purchasedItems = cartItems.map(item => ({
-        ...item,
-        purchaseDate: new Date().toISOString()
+      // Check if all items have the same currency
+      const firstCurrency = cartItems.length > 0 ? (cartItems[0].currency || 'USD').toUpperCase() : 'USD'
+      const allSameCurrency = cartItems.every(item => 
+        (item.currency || 'USD').toUpperCase() === firstCurrency
+      )
+      
+      let totalInSelectedCurrency = 0
+      let currencyCode = currency.code
+      
+      if (allSameCurrency) {
+        // All items in same currency - sum directly and use that currency
+        cartItems.forEach(item => {
+          totalInSelectedCurrency += parseFloat(item.price || 0) * (item.quantity || 1)
+        })
+        currencyCode = firstCurrency
+      } else {
+        // Mixed currencies - convert all to user's selected currency
+        const userCurrency = currency.code.toUpperCase()
+        cartItems.forEach(item => {
+          const itemPrice = parseFloat(item.price || 0)
+          const itemCurrency = (item.currency || 'USD').toUpperCase()
+          
+          // Convert item price from its currency to USD first
+          const itemPriceInUSD = itemPrice / (EXCHANGE_RATES[itemCurrency] || 1.0)
+          // Then convert from USD to user's selected currency
+          const itemPriceInUserCurrency = itemPriceInUSD * (EXCHANGE_RATES[userCurrency] || 1.0)
+          
+          totalInSelectedCurrency += itemPriceInUserCurrency * (item.quantity || 1)
+        })
+        currencyCode = userCurrency
+      }
+      
+      // Force INR for Razorpay domestic payments (to avoid international card issues)
+      // If user wants other currencies, they need international cards enabled in Razorpay
+      if (currencyCode === 'INR') {
+        currencyCode = 'INR'
+      }
+      
+      // Debug logging
+      console.log('Payment Details:', {
+        currency: currencyCode,
+        amount: totalInSelectedCurrency,
+        allSameCurrency,
+        itemsCurrency: firstCurrency
+      })
+
+      // Prepare order items - preserve original currency for display
+      const orderItems = cartItems.map(item => ({
+        id: item.id,
+        name: item.name || 'Sticker',
+        category: item.category || 'General',
+        price: parseFloat(item.price || 0), // Keep original price
+        currency: item.currency || 'USD', // Keep original currency
+        quantity: item.quantity || 1,
+        image_url: item.image_url || item.imagePreview || item.image,
+        specifications: item.specifications || {}
       }))
+
+      // Create payment order in backend
+      const orderData = {
+        user_id: user.id,
+        amount: totalInSelectedCurrency,
+        currency: currencyCode,
+        order_type: 'CART_PURCHASE',
+        items: orderItems
+      }
+
+      const orderResponse = await createPaymentOrder(orderData, token)
       
-      // Add new purchases to existing ones
-      allPurchases[userKey] = [...userPurchases, ...purchasedItems]
-      localStorage.setItem('purchasedStickers', JSON.stringify(allPurchases))
+      // Open Razorpay checkout
+      const paymentResponse = await openRazorpayCheckout(
+        {
+          amount: convertToSmallestUnit(totalInSelectedCurrency, currencyCode),
+          currency: currencyCode,
+          razorpay_order_id: orderResponse.razorpay_order_id
+        },
+        {
+          name: 'Stickers Website',
+          description: `Payment for ${cartItems.length} sticker(s)`,
+          customerName: user.name || user.email,
+          customerEmail: user.email
+        }
+      )
+
+      // Verify payment
+      const verificationData = {
+        razorpay_order_id: paymentResponse.razorpay_order_id,
+        razorpay_payment_id: paymentResponse.razorpay_payment_id,
+        razorpay_signature: paymentResponse.razorpay_signature,
+        user_id: user.id
+      }
+
+      const verificationResult = await verifyPayment(verificationData, token)
+
+      if (!verificationResult.success) {
+        throw new Error('Payment verification failed')
+      }
+
+      // Payment successful! Order is already saved in database via payment verification
+      // No need to save to localStorage - orders are fetched from database
+      
+      const itemCount = cartItems.length
       
       // Clear cart after successful payment
       clearCart()
@@ -102,11 +286,15 @@ const Cart = () => {
       // Show success message
       alert(`Payment successful! ${itemCount} sticker(s) added to your collection.`)
       
-      // Redirect to My Stickers page
-      navigate('/profile')
+      // Redirect to home page
+      navigate('/')
     } catch (error) {
-      console.error('Error saving purchased stickers:', error)
-      alert('Payment processed, but there was an error saving your stickers. Please contact support.')
+      console.error('Error processing payment:', error)
+      setIsProcessing(false)
+      // Only show error if it's not a user cancellation
+      if (error.message && !error.message.includes('cancelled by user') && !error.message.includes('Payment cancelled')) {
+        alert(`Payment failed: ${error.message}`)
+      }
     }
   }
 
@@ -205,7 +393,7 @@ const Cart = () => {
                     {/* Price */}
                     <div className="text-right shrink-0">
                       <p className="font-semibold text-gray-800">
-                        {formatPrice((item.price || 0) * item.quantity)}
+                        {formatStickerPrice((item.price || 0) * item.quantity, item.currency)}
                       </p>
                     </div>
                   </div>
@@ -220,7 +408,7 @@ const Cart = () => {
               <div className="flex items-center justify-between">
                 <span className="text-lg font-bold text-gray-800">Total:</span>
                 <span className="text-lg font-bold text-gray-800">
-                  {formatPrice(totalPrice)}
+                  {formatStickerPrice(totalPrice, totalCurrency)}
                 </span>
               </div>
               
@@ -241,15 +429,15 @@ const Cart = () => {
               
               <button
                 className={`w-full py-3 font-semibold rounded-md transition-colors shadow-md ${
-                  user
+                  user && !isProcessing
                     ? 'bg-gradient-to-r from-buttonColorst to-buttonColorend text-white hover:opacity-90'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
                 onClick={handlePayment}
-                disabled={!user}
-                title={!user ? 'Please login to proceed with payment' : 'Proceed to payment'}
+                disabled={!user || isProcessing}
+                title={!user ? 'Please login to proceed with payment' : isProcessing ? 'Processing payment...' : 'Proceed to payment'}
               >
-                {user ? 'Pay Now' : 'Login to Pay'}
+                {isProcessing ? 'Processing...' : user ? 'Pay Now' : 'Login to Pay'}
               </button>
             </div>
           )}

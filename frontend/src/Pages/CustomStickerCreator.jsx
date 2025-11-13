@@ -7,17 +7,24 @@ import { getCroppedImg } from '../utils/imageUtils'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
-import { getUserFromStorage } from '../utils/storageUtils'
+import { getUserFromStorage, getTokenFromStorage } from '../utils/storageUtils'
 import ZoomOutIcon from '@mui/icons-material/ZoomOut'
 import RotateLeftIcon from '@mui/icons-material/RotateLeft'
 import RotateRightIcon from '@mui/icons-material/RotateRight'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CropIcon from '@mui/icons-material/Crop'
 import CloseIcon from '@mui/icons-material/Close'
+import { 
+  initializeRazorpay, 
+  createPaymentOrder, 
+  verifyPayment, 
+  openRazorpayCheckout,
+  convertToSmallestUnit 
+} from '../utils/razorpayUtils'
 
 const CustomStickerCreator = () => {
   const navigate = useNavigate()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, currency, convertPrice } = useCurrency()
   const fileInputRef = useRef(null)
   const [uploadedImage, setUploadedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -298,6 +305,11 @@ const CustomStickerCreator = () => {
     }
   }
 
+  // Initialize Razorpay on component mount
+  useEffect(() => {
+    initializeRazorpay()
+  }, [])
+
   const handlePayNow = async () => {
     if (!uploadedImage) {
       alert('Please upload an image first')
@@ -316,8 +328,9 @@ const CustomStickerCreator = () => {
 
     // Check if user is logged in (required for payment)
     const user = getUserFromStorage()
+    const token = getTokenFromStorage()
 
-    if (!user) {
+    if (!user || !token) {
       alert('Please login to purchase stickers')
       navigate('/login', { 
         state: { 
@@ -331,7 +344,77 @@ const CustomStickerCreator = () => {
     setIsSaving(true)
 
     try {
-      // Always save to database (whether published or not)
+      // totalPrice is already in USD (base currency)
+      // Convert to user's selected currency for payment
+      const priceInSelectedCurrency = convertPrice(parseFloat(totalPrice))
+      // Get the user's selected currency code
+      // For Razorpay payments, we force INR for domestic payments to avoid international card issues
+      // But we store the actual currency the user selected
+      const userSelectedCurrency = currency.code || 'USD'
+      const currencyCode = userSelectedCurrency === 'INR' ? 'INR' : userSelectedCurrency
+      
+      // Debug logging
+      console.log('Payment Details:', {
+        currency: currencyCode,
+        amount: priceInSelectedCurrency,
+        originalCurrency: currency.code,
+        basePriceUSD: totalPrice
+      })
+
+      // Create payment order in backend
+      const orderData = {
+        user_id: user.id,
+        amount: priceInSelectedCurrency,
+        currency: currencyCode,
+        order_type: 'CUSTOM_STICKER',
+        items: [{
+          name: stickerName.trim(),
+          category: stickerCategory.trim(),
+          price: priceInSelectedCurrency,
+          quantity: quantity,
+          image_url: imagePreview || uploadedImage,
+          specifications: {
+            size: stickerSize,
+            shape: stickerShape,
+            finish: finish,
+            quantity: quantity
+          }
+        }]
+      }
+
+      const orderResponse = await createPaymentOrder(orderData, token)
+      
+      // Open Razorpay checkout
+      const paymentResponse = await openRazorpayCheckout(
+        {
+          amount: convertToSmallestUnit(priceInSelectedCurrency, currencyCode),
+          currency: currencyCode,
+          razorpay_order_id: orderResponse.razorpay_order_id
+        },
+        {
+          name: 'Stickers Website',
+          description: `Payment for custom sticker: ${stickerName.trim()}`,
+          customerName: user.name || user.email,
+          customerEmail: user.email
+        }
+      )
+
+      // Verify payment
+      const verificationData = {
+        razorpay_order_id: paymentResponse.razorpay_order_id,
+        razorpay_payment_id: paymentResponse.razorpay_payment_id,
+        razorpay_signature: paymentResponse.razorpay_signature,
+        user_id: user.id
+      }
+
+      const verificationResult = await verifyPayment(verificationData, token)
+
+      if (!verificationResult.success) {
+        throw new Error('Payment verification failed')
+      }
+
+      // Payment successful - save sticker to database
+      // Store price in the currency the user paid in
       const stickerData = {
         user_id: user.id,
         name: stickerName.trim(),
@@ -344,14 +427,32 @@ const CustomStickerCreator = () => {
           finish,
           imageFile: uploadedImage.name
         },
-        price: parseFloat(totalPrice),
+        price: priceInSelectedCurrency, // Store in the currency user paid
+        currency: currencyCode.trim().toUpperCase(), // Store the currency code (ensure uppercase)
         is_published: false
       }
+      
+      // Ensure currency is always set and valid
+      if (!stickerData.currency || stickerData.currency.trim() === '') {
+        console.error('Currency code is empty! Defaulting to USD')
+        stickerData.currency = 'USD'
+      }
+      
+      // Debug logging
+      console.log('Saving sticker with data:', {
+        price: priceInSelectedCurrency,
+        currency: stickerData.currency,
+        userCurrency: currency.code,
+        currencySymbol: currency.symbol,
+        currencyCode: currencyCode,
+        fullCurrencyObject: currency
+      })
 
       const response = await fetch('/api/custom-stickers', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(stickerData),
       })
@@ -364,41 +465,27 @@ const CustomStickerCreator = () => {
       const savedSticker = await response.json()
       console.log('Sticker saved to database:', savedSticker)
 
-      // Save to purchased stickers in localStorage
-      const stickerItem = {
-        id: savedSticker.id,
-        name: savedSticker.name,
-        category: savedSticker.category,
-        price: parseFloat(savedSticker.price),
-        quantity: 1,
-        image_url: savedSticker.image_url,
-        imagePreview: savedSticker.image_url,
-        image: savedSticker.image_url,
-        specifications: typeof savedSticker.specifications === 'string' 
-          ? JSON.parse(savedSticker.specifications) 
-          : savedSticker.specifications,
-        purchaseDate: new Date().toISOString(),
-        isPublished: savedSticker.is_published,
-        status: savedSticker.status,
-        admin_note: savedSticker.admin_note
-      }
-
-      // Save to purchased stickers
-      const allPurchases = JSON.parse(localStorage.getItem('purchasedStickers') || '{}')
-      const userKey = user.id || user.email
-      if (!allPurchases[userKey]) {
-        allPurchases[userKey] = []
-      }
-      allPurchases[userKey].push(stickerItem)
-      localStorage.setItem('purchasedStickers', JSON.stringify(allPurchases))
-
+      // Payment successful! Order is already saved in database via payment verification
+      // No need to save to localStorage - orders are fetched from database
+      
+      // Reset form
+      setUploadedImage(null)
+      setImagePreview(null)
+      setStickerName('')
+      setStickerCategory('')
+      setQuantity(1)
+      
+      // Show success message
       alert('Payment successful! Your sticker has been submitted for review. You will be notified once it is approved or rejected.')
       
-      // Navigate to My Stickers page
-      navigate('/profile')
+      // Navigate to home page
+      navigate('/')
     } catch (error) {
       console.error('Error processing payment:', error)
-      alert(`Payment failed: ${error.message}`)
+      // Only show error if it's not a user cancellation
+      if (error.message && !error.message.includes('cancelled by user') && !error.message.includes('Payment cancelled')) {
+        alert(`Payment failed: ${error.message}`)
+      }
     } finally {
       setIsSaving(false)
     }

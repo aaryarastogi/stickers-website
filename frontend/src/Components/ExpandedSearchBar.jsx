@@ -6,7 +6,7 @@ import { useCurrency } from '../context/CurrencyContext';
 
 function ExpandedSearchBar(){
   const navigate = useNavigate();
-  const { formatPrice } = useCurrency();
+  const { formatPrice, formatStickerPrice } = useCurrency();
   const [searchValue, setSearchValue] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -247,7 +247,7 @@ function ExpandedSearchBar(){
                     />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-gray-900 truncate">{sticker.name}</div>
-                      <div className="text-sm text-gray-500">{formatPrice(parseFloat(sticker.price))} • {sticker.template_title}</div>
+                      <div className="text-sm text-gray-500">{formatStickerPrice(parseFloat(sticker.price), sticker.currency)} • {sticker.template_title}</div>
                     </div>
                   </div>
                 ))}

@@ -7,7 +7,7 @@ import { getUserFromStorage } from '../utils/storageUtils'
 const PublicProfile = () => {
   const navigate = useNavigate()
   const { username } = useParams()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, formatPriceWithCurrency, formatStickerPrice } = useCurrency()
   const [profile, setProfile] = useState(null)
   const [userStickers, setUserStickers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -189,7 +189,7 @@ const PublicProfile = () => {
                     )}
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-gray-600 font-semibold">
-                        {formatPrice(parseFloat(sticker.price || 0))}
+                        {formatStickerPrice(parseFloat(sticker.price || 0), sticker.currency)}
                       </span>
                       <div className="flex items-center gap-3">
                         {/* Like Count Display */}

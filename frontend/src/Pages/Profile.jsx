@@ -11,7 +11,7 @@ import { getUserFromStorage, updateUserFieldInStorage } from '../utils/storageUt
 
 const Profile = () => {
   const navigate = useNavigate()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, formatPriceWithCurrency, formatStickerPrice } = useCurrency()
   const [profile, setProfile] = useState(null)
   const [myStickers, setMyStickers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -684,7 +684,7 @@ const Profile = () => {
                       )}
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-gray-600 font-semibold">
-                          {formatPrice(parseFloat(sticker.price || 0))}
+                          {formatStickerPrice(parseFloat(sticker.price || 0), sticker.currency)}
                         </span>
                         <div className="flex items-center gap-3">
                           {sticker.like_count > 0 && (

@@ -210,12 +210,76 @@ export const CurrencyProvider = ({ children }) => {
     return `${currency.symbol}${convertedPrice.toFixed(decimals)}`
   }
 
+  // Format price with a specific currency (for stickers that have their own currency)
+  // This displays the price in the sticker's original currency without conversion
+  const formatPriceWithCurrency = (price, currencyCode, decimals = 2) => {
+    if (!price || price === 0) {
+      const defaultCurrency = CURRENCIES.US || { symbol: '$' }
+      return `${defaultCurrency.symbol}0.00`
+    }
+    
+    const currencyCodeUpper = (currencyCode || 'USD').toUpperCase()
+    // Map currency codes to country codes for lookup
+    const currencyToCountry = {
+      'INR': 'IN',
+      'GBP': 'GB',
+      'USD': 'US',
+      'CAD': 'CA',
+      'AED': 'AE',
+      'EUR': 'DE',
+      'RUB': 'RU',
+      'AUD': 'AU'
+    }
+    const countryCode = currencyToCountry[currencyCodeUpper] || 'US'
+    const currencyInfo = CURRENCIES[countryCode] || CURRENCIES.US
+    const priceNum = typeof price === 'string' ? parseFloat(price) : price
+    
+    return `${currencyInfo.symbol}${priceNum.toFixed(decimals)}`
+  }
+
+  // Convert price from one currency to another
+  const convertPriceFromCurrency = (price, fromCurrency, toCurrency) => {
+    if (!price || price === 0) return 0
+    
+    const fromCurrencyUpper = (fromCurrency || 'USD').toUpperCase()
+    const toCurrencyUpper = (toCurrency || 'USD').toUpperCase()
+    
+    // If same currency, no conversion needed
+    if (fromCurrencyUpper === toCurrencyUpper) {
+      return typeof price === 'string' ? parseFloat(price) : price
+    }
+    
+    const priceNum = typeof price === 'string' ? parseFloat(price) : price
+    
+    // Convert from source currency to USD first
+    const priceInUSD = priceNum / (EXCHANGE_RATES[fromCurrencyUpper] || 1.0)
+    // Then convert from USD to target currency
+    const convertedPrice = priceInUSD * (EXCHANGE_RATES[toCurrencyUpper] || 1.0)
+    
+    return convertedPrice
+  }
+
+  // Format sticker price - converts from sticker's currency to user's currency and displays
+  const formatStickerPrice = (price, stickerCurrency, decimals = 2) => {
+    if (!price || price === 0) {
+      return `${currency.symbol}0.00`
+    }
+    
+    // Convert from sticker's currency to user's selected currency
+    const convertedPrice = convertPriceFromCurrency(price, stickerCurrency, currency.code)
+    
+    return `${currency.symbol}${convertedPrice.toFixed(decimals)}`
+  }
+
   const value = {
     country,
     currency,
     setCountry: setCountryManually,
     convertPrice,
     formatPrice,
+    formatPriceWithCurrency,
+    convertPriceFromCurrency,
+    formatStickerPrice,
     isLoading,
     currencies: CURRENCIES,
     exchangeRates: EXCHANGE_RATES

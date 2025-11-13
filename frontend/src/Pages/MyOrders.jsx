@@ -4,6 +4,24 @@ import Navbar from './Navbar'
 import { useCurrency } from '../context/CurrencyContext'
 import { getUserFromStorage } from '../utils/storageUtils'
 
+// Currency symbols mapping
+const CURRENCY_SYMBOLS = {
+  INR: '₹',
+  USD: '$',
+  GBP: '£',
+  EUR: '€',
+  CAD: 'C$',
+  AED: 'د.إ',
+  RUB: '₽',
+  AUD: 'A$'
+}
+
+// Format price with currency symbol (amount is already in the correct currency)
+const formatPriceWithCurrency = (amount, currencyCode = 'INR') => {
+  const symbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode
+  return `${symbol}${parseFloat(amount || 0).toFixed(2)}`
+}
+
 const MyOrders = () => {
   const navigate = useNavigate()
   const { formatPrice } = useCurrency()
@@ -19,49 +37,130 @@ const MyOrders = () => {
   useEffect(() => {
     // Check if user is logged in
     const parsedUser = getUserFromStorage()
-    if (parsedUser) {
+    const token = localStorage.getItem('token')
+    
+    if (parsedUser && token) {
       setUser(parsedUser)
-        
-        // Get purchased stickers for this user
-        const allPurchases = JSON.parse(localStorage.getItem('purchasedStickers') || '{}')
-        const userKey = parsedUser.id || parsedUser.email
-        const userPurchases = allPurchases[userKey] || []
-        
-        // Transform purchases into orders format
-        const ordersList = userPurchases.map((purchase, index) => {
-          const orderDate = purchase.purchaseDate || new Date().toISOString()
-          const timestamp = new Date(orderDate).getTime()
-          const userKey = parsedUser.id || parsedUser.email || 'user'
-          const shortKey = userKey.toString().slice(0, 3).toUpperCase()
-          const orderNum = `ORD-${shortKey}-${timestamp.toString().slice(-6)}`
-          
-          return {
-            id: purchase.id || `order-${index}`,
-            sticker: purchase,
-            orderDate: orderDate,
-            price: parseFloat(purchase.price || 0),
-            quantity: purchase.quantity || 1,
-            status: 'completed',
-            orderNumber: orderNum
-          }
-        })
-        
-        // Sort orders
-        let sortedOrders = [...ordersList]
-        if (filter === 'recent') {
-          sortedOrders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
-        } else if (filter === 'oldest') {
-          sortedOrders.sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate))
-        }
-        
-        setOrders(sortedOrders)
-        setFilteredOrders(sortedOrders)
+      fetchOrdersFromAPI(parsedUser.id, token)
     } else {
       // Redirect to login if not logged in
       navigate('/login', { state: { message: 'Please login to view your orders', redirectTo: '/my-orders' } })
+      setLoading(false)
     }
-    setLoading(false)
   }, [navigate, filter])
+
+  const fetchOrdersFromAPI = async (userId, token) => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/payments/orders`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch orders')
+      }
+
+      const ordersData = await response.json()
+      
+      // Transform API orders to match the expected format
+      const ordersList = ordersData.map(order => {
+        // Parse order_data to get items
+        let orderItems = []
+        try {
+          if (order.order_data) {
+            orderItems = typeof order.order_data === 'string' 
+              ? JSON.parse(order.order_data) 
+              : order.order_data
+          }
+        } catch (e) {
+          console.error('Error parsing order data:', e)
+        }
+
+        // For each item in the order, create an order entry
+        if (orderItems.length > 0) {
+          return orderItems.map((item, index) => ({
+            id: `${order.id}-${index}`,
+            orderId: order.id,
+            sticker: {
+              id: item.id,
+              name: item.name || 'Sticker',
+              category: item.category || 'General',
+              image_url: item.image_url,
+              imagePreview: item.image_url,
+              image: item.image_url,
+              price: parseFloat(item.price || 0),
+              quantity: item.quantity || 1,
+              specifications: item.specifications || {}
+            },
+            orderDate: order.created_at || new Date().toISOString(),
+            price: parseFloat(item.price || 0) * (item.quantity || 1),
+            quantity: item.quantity || 1,
+            status: order.status === 'PAID' ? 'completed' : order.status?.toLowerCase() || 'pending',
+            orderNumber: order.order_number,
+            currency: order.currency || 'INR'
+          }))
+        } else {
+          // Fallback if no items
+          return [{
+            id: order.id,
+            orderId: order.id,
+            sticker: {
+              name: 'Order Items',
+              category: order.order_type || 'General',
+              price: parseFloat(order.amount || 0)
+            },
+            orderDate: order.created_at || new Date().toISOString(),
+            price: parseFloat(order.amount || 0),
+            quantity: 1,
+            status: order.status === 'PAID' ? 'completed' : order.status?.toLowerCase() || 'pending',
+            orderNumber: order.order_number,
+            currency: order.currency || 'INR'
+          }]
+        }
+      }).flat() // Flatten the array
+      
+      // Sort orders
+      let sortedOrders = [...ordersList]
+      if (filter === 'recent') {
+        sortedOrders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
+      } else if (filter === 'oldest') {
+        sortedOrders.sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate))
+      } else {
+        // Default: most recent first
+        sortedOrders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
+      }
+      
+      setOrders(sortedOrders)
+      setFilteredOrders(sortedOrders)
+    } catch (error) {
+      console.error('Error fetching orders:', error)
+      // Fallback to localStorage if API fails
+      const allPurchases = JSON.parse(localStorage.getItem('purchasedStickers') || '{}')
+      const userKey = userId || user?.email
+      const userPurchases = allPurchases[userKey] || []
+      
+      const ordersList = userPurchases.map((purchase, index) => {
+        const orderDate = purchase.purchaseDate || new Date().toISOString()
+        return {
+          id: purchase.id || `order-${index}`,
+          sticker: purchase,
+          orderDate: orderDate,
+          price: parseFloat(purchase.price || 0),
+          quantity: purchase.quantity || 1,
+          status: 'completed',
+          orderNumber: purchase.orderNumber || `ORD-${index}`
+        }
+      })
+      
+      setOrders(ordersList)
+      setFilteredOrders(ordersList)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Filter orders based on search query
   useEffect(() => {
@@ -95,6 +194,8 @@ const MyOrders = () => {
 
 
   const getTotalSpent = () => {
+    // Sum all orders - amounts are already in their respective currencies
+    // Note: This assumes all orders are in the same currency (which should be the case)
     return orders.reduce((total, order) => total + (order.price * order.quantity), 0)
   }
 
@@ -219,7 +320,11 @@ const MyOrders = () => {
                 <div className="text-sm text-gray-500 mb-1">Total Orders</div>
                 <div className="text-2xl md:text-3xl font-bold text-purple-600 mb-2">{orders.length}</div>
                 <div className="text-sm text-gray-500 mb-1">Total Spent</div>
-                <div className="text-xl md:text-2xl font-bold text-gray-900">{formatPrice(getTotalSpent())}</div>
+                <div className="text-xl md:text-2xl font-bold text-gray-900">
+                  {orders.length > 0 && orders[0].currency 
+                    ? formatPriceWithCurrency(getTotalSpent(), orders[0].currency)
+                    : formatPrice(getTotalSpent())}
+                </div>
               </div>
             )}
           </div>
@@ -396,7 +501,7 @@ const MyOrders = () => {
                   <div className="flex items-center justify-between mb-3">
                       <div className="space-x-5">
                       <span className="text-md font-semibold capitalize">{order.sticker.name}</span>
-                      <span className="text-gray-500">{formatPrice(order.price * order.quantity)}</span>
+                      <span className="text-gray-500">{formatPriceWithCurrency(order.price * order.quantity, order.currency)}</span>
                       </div>
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
                       <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
@@ -450,10 +555,29 @@ const MyOrders = () => {
                     <div>
                       <div className="text-sm text-gray-500 mb-1">Order Date</div>
                       <div className="text-base font-semibold text-gray-900">{formatDate(selectedOrder.orderDate)}</div>
+                      {selectedOrder.orderNumber && (
+                        <div className="text-xs text-gray-400 mt-1">Order #: {selectedOrder.orderNumber}</div>
+                      )}
                     </div>
-                    <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-green-100 text-green-800">
-                      <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                      Delivered
+                    <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${
+                      selectedOrder.status === 'completed' || selectedOrder.status === 'PAID' 
+                        ? 'bg-green-100 text-green-800' 
+                        : selectedOrder.status === 'pending' || selectedOrder.status === 'PENDING'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full mr-2 ${
+                        selectedOrder.status === 'completed' || selectedOrder.status === 'PAID'
+                          ? 'bg-green-500'
+                          : selectedOrder.status === 'pending' || selectedOrder.status === 'PENDING'
+                          ? 'bg-yellow-500'
+                          : 'bg-red-500'
+                      }`}></span>
+                      {selectedOrder.status === 'completed' || selectedOrder.status === 'PAID' 
+                        ? 'Paid' 
+                        : selectedOrder.status === 'pending' || selectedOrder.status === 'PENDING'
+                        ? 'Pending'
+                        : selectedOrder.status || 'Unknown'}
                     </span>
                   </div>
 
@@ -512,7 +636,7 @@ const MyOrders = () => {
                     <div>
                       <div className="text-sm text-gray-500 mb-1">Unit Price</div>
                       <div className="text-lg font-semibold text-gray-900">
-                        {formatPrice(selectedOrder.price)}
+                        {formatPriceWithCurrency(selectedOrder.price, selectedOrder.currency)}
                       </div>
                     </div>
                     <div>
@@ -524,7 +648,7 @@ const MyOrders = () => {
                     <div>
                       <div className="text-sm text-gray-500 mb-1">Total Amount</div>
                       <div className="text-xl font-bold text-purple-600">
-                        {formatPrice(selectedOrder.price * selectedOrder.quantity)}
+                        {formatPriceWithCurrency(selectedOrder.price * selectedOrder.quantity, selectedOrder.currency)}
                       </div>
                     </div>
                   </div>

@@ -106,3 +106,16 @@ export const updateUserFieldInStorage = (field, value) => {
   }
 };
 
+/**
+ * Gets JWT token from localStorage
+ * @returns {string|null} - Token or null if not found
+ */
+export const getTokenFromStorage = () => {
+  try {
+    return localStorage.getItem('token');
+  } catch (error) {
+    console.error('Error reading token from localStorage:', error);
+    return null;
+  }
+};
+

@@ -10,7 +10,7 @@ const PublishedStickers = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { addToCart, cartItems, updateQuantity } = useCart()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, formatStickerPrice } = useCurrency()
   const [publishedStickers, setPublishedStickers] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -47,6 +47,7 @@ const PublishedStickers = () => {
       name: sticker.name,
       category: sticker.category,
       price: parseFloat(sticker.price),
+      currency: sticker.currency || 'USD', // Preserve currency
       quantity: 1,
       image_url: sticker.image_url,
       imagePreview: sticker.image_url,
@@ -148,7 +149,7 @@ const PublishedStickers = () => {
               )}
               <div className="flex items-center justify-between">
                 <span className="text-gray-600 font-semibold">
-                  {formatPrice(parseFloat(sticker.price || 0))}
+                  {formatStickerPrice(parseFloat(sticker.price || 0), sticker.currency)}
                 </span>
                 {/* Add to Cart Button / Quantity Selector */}
                 {isInCart(sticker.id) ? (

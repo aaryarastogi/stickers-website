@@ -14,7 +14,7 @@ const Stickers = () => {
   const categoryId = location.state?.categoryId
   const categoryName = location.state?.categoryName || location.state?.templateTitle || 'Stickers'
   const { addToCart, cartItems, updateQuantity } = useCart()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, formatPriceWithCurrency, formatStickerPrice } = useCurrency()
   
   const [stickers, setStickers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -107,7 +107,12 @@ const Stickers = () => {
   const handleAddToCart = (sticker) => {
     const stickerType = sticker.sticker_type || 'template'
     const priceValue = sticker.price ? parseFloat(sticker.price) : 0
-    addToCart({ ...sticker, sticker_type: stickerType, price: priceValue })
+    addToCart({ 
+      ...sticker, 
+      sticker_type: stickerType, 
+      price: priceValue,
+      currency: sticker.currency || 'USD' // Preserve currency
+    })
   }
 
   const isInCart = (id) => {
@@ -256,7 +261,7 @@ const Stickers = () => {
 
                         {/* Right side: Price and Add to Cart Button */}
                         <div className="flex flex-col items-end">
-                          <span className="text-gray-600 text-sm font-semibold mb-2">{formatPrice(priceValue)}</span>
+                          <span className="text-gray-600 text-sm font-semibold mb-2">{formatStickerPrice(priceValue, sticker.currency)}</span>
                           {/* Add to Cart Button / Quantity Selector */}
                           {isInCart(sticker.id) ? (
                             <div className="flex items-center justify-center gap-2">

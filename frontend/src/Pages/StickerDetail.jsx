@@ -12,7 +12,7 @@ const StickerDetail = () => {
   const navigate = useNavigate()
   const { stickerId, type } = useParams()
   const { addToCart, cartItems, updateQuantity } = useCart()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, formatPriceWithCurrency, formatStickerPrice } = useCurrency()
   const [sticker, setSticker] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -59,6 +59,7 @@ const StickerDetail = () => {
       name: sticker.name,
       category: sticker.category || sticker.template_title,
       price: parseFloat(sticker.price),
+      currency: sticker.currency || 'USD', // Preserve currency
       quantity: 1,
       image_url: sticker.image_url,
       imagePreview: sticker.image_url,
@@ -187,7 +188,7 @@ const StickerDetail = () => {
 
                 {/* Price */}
                 <div className="text-3xl font-bold text-gray-900 mb-6">
-                  {formatPrice(parseFloat(sticker.price || 0))}
+                  {formatStickerPrice(parseFloat(sticker.price || 0), sticker.currency)}
                 </div>
 
                 {/* Template/Category Info */}
