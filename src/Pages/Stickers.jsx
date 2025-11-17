@@ -116,18 +116,50 @@ const Stickers = () => {
   }
 
   const isInCart = (id) => {
-    return cartItems.some(item => item.id === id)
+    const expectedId = String(id)
+    // Check both item.id and item.stickerId to handle backend cart items
+    return cartItems.some(item => {
+      const itemStickerId = String(item.stickerId || '')
+      const itemId = String(item.id || '')
+      
+      // Match by stickerId (preferred) or by id if it matches
+      return itemStickerId === expectedId || 
+             itemId === expectedId ||
+             (itemId === expectedId && !itemStickerId) // Fallback for old format
+    })
   }
 
   const getCartQuantity = (id) => {
-    const item = cartItems.find(item => item.id === id)
+    const expectedId = String(id)
+    // Check both item.id and item.stickerId to handle backend cart items
+    const item = cartItems.find(item => {
+      const itemStickerId = String(item.stickerId || '')
+      const itemId = String(item.id || '')
+      
+      return itemStickerId === expectedId || 
+             itemId === expectedId ||
+             (itemId === expectedId && !itemStickerId) // Fallback for old format
+    })
     return item ? item.quantity : 0
   }
 
   const handleQuantityChange = (sticker, change) => {
-    const currentQuantity = getCartQuantity(sticker.id)
-    const newQuantity = currentQuantity + change
-    updateQuantity(sticker.id, newQuantity)
+    const expectedId = String(sticker.id)
+    // Find the actual cart item to get its backend ID
+    const cartItem = cartItems.find(item => {
+      const itemStickerId = String(item.stickerId || '')
+      const itemId = String(item.id || '')
+      
+      return itemStickerId === expectedId || 
+             itemId === expectedId ||
+             (itemId === expectedId && !itemStickerId) // Fallback for old format
+    })
+    if (cartItem) {
+      const currentQuantity = cartItem.quantity
+      const newQuantity = currentQuantity + change
+      // Use the cart item's ID (which is the backend cart_item.id)
+      updateQuantity(cartItem.id, newQuantity)
+    }
   }
 
   return (

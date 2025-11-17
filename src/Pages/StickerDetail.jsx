@@ -72,23 +72,65 @@ const StickerDetail = () => {
 
   const isInCart = () => {
     if (!sticker) return false
-    const itemId = sticker.sticker_type === 'template' ? sticker.id : `user-${sticker.id}`
-    return cartItems.some(item => item.id === itemId)
+    const expectedStickerId = sticker.sticker_type === 'template' 
+      ? String(sticker.id) 
+      : `user-${sticker.id}`
+    const directStickerId = String(sticker.id)
+    
+    // Check if any cart item matches this sticker
+    return cartItems.some(item => {
+      const itemStickerId = String(item.stickerId || '')
+      const itemId = String(item.id || '')
+      
+      // Match by stickerId (preferred) or by id if it matches expected format
+      return itemStickerId === expectedStickerId || 
+             itemStickerId === directStickerId ||
+             (itemId === expectedStickerId && !itemStickerId) // Fallback for old format
+    })
   }
 
   const getCartQuantity = () => {
     if (!sticker) return 0
-    const itemId = sticker.sticker_type === 'template' ? sticker.id : `user-${sticker.id}`
-    const item = cartItems.find(item => item.id === itemId)
+    const expectedStickerId = sticker.sticker_type === 'template' 
+      ? String(sticker.id) 
+      : `user-${sticker.id}`
+    const directStickerId = String(sticker.id)
+    
+    // Find the cart item that matches this sticker
+    const item = cartItems.find(item => {
+      const itemStickerId = String(item.stickerId || '')
+      const itemId = String(item.id || '')
+      
+      return itemStickerId === expectedStickerId || 
+             itemStickerId === directStickerId ||
+             (itemId === expectedStickerId && !itemStickerId) // Fallback for old format
+    })
     return item ? item.quantity : 0
   }
 
   const handleQuantityChange = (change) => {
     if (!sticker) return
-    const itemId = sticker.sticker_type === 'template' ? sticker.id : `user-${sticker.id}`
-    const currentQuantity = getCartQuantity()
-    const newQuantity = currentQuantity + change
-    updateQuantity(itemId, newQuantity)
+    const expectedStickerId = sticker.sticker_type === 'template' 
+      ? String(sticker.id) 
+      : `user-${sticker.id}`
+    const directStickerId = String(sticker.id)
+    
+    // Find the actual cart item to get its backend ID
+    const cartItem = cartItems.find(item => {
+      const itemStickerId = String(item.stickerId || '')
+      const itemId = String(item.id || '')
+      
+      return itemStickerId === expectedStickerId || 
+             itemStickerId === directStickerId ||
+             (itemId === expectedStickerId && !itemStickerId) // Fallback for old format
+    })
+    
+    if (cartItem) {
+      const currentQuantity = cartItem.quantity
+      const newQuantity = currentQuantity + change
+      // Use the cart item's ID (which is the backend cart_item.id)
+      updateQuantity(cartItem.id, newQuantity)
+    }
   }
 
   const handleCreatorClick = () => {
